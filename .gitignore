@@ -1,3 +1,4 @@
 .DS_Store
 CALCS/
 *.pyc
+src/__pycache__/

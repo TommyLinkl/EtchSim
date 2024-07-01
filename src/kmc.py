@@ -97,7 +97,8 @@ def kmc_run(site_list, sim_params, trajectory_filename, runtime_flag=False):
         start_time = time.time()
         delta_t = kmc_step(site_list, sim_params)
         end_time = time.time()
-        print(f"KMC step {step_count}, sim time: {total_time:.5f}, elapsed time: {(end_time - start_time):.2f} seconds") if runtime_flag else None
+        if step_count%100 == 0:
+            print(f"KMC step {step_count}, sim time: {total_time:.5f}, this one KMC step elapsed time: {(end_time - start_time):.2f} seconds") if runtime_flag else None
 
         if delta_t is False:
             print("No further events can occur. Simulation stopped.")
