@@ -33,5 +33,7 @@ npl_params = {
 
 calc_setting = {
     'verbosity': 0, 
-    'runtime_flag': 0
+    'runtime_flag': 0, 
+    'write_traj': 0, 
+    'write_every': 50
 }
