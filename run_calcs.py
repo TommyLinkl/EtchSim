@@ -34,7 +34,7 @@ def main():
     if not calc_setting['write_traj']: 
         trajFileName = None
     else: 
-        trajFileName = f'{sim_params['calc_dir']}traj.xyz'
+        trajFileName = f"{sim_params['calc_dir']}traj.xyz"
     kmc_run(wz_lattice, sim_params, trajFileName, calc_setting['write_every'], runtime_flag=calc_setting['runtime_flag'])
     end_kmc_time = time.time()
     print(f"Done with all KMC steps. Total elapsed time: {(end_kmc_time - start_kmc_time):.2f} seconds")

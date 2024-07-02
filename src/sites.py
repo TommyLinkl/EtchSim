@@ -76,7 +76,10 @@ class Site:
 
     def update_rates(self, sim_params):
         epsilon = sim_params['epsilon']
-        mu = sim_params['mu']
+        if self.cation_bool:
+            mu = sim_params['mu_In']
+        else: 
+            mu = sim_params['mu_P']
         T = sim_params['T']
         self.atom_k_attach = np.exp( (epsilon * self.num_atom_neighbors + mu) / (2 * T) ) 
         self.atom_k_detach = np.exp(-(epsilon * self.num_atom_neighbors + mu) / (2 * T) ) 
@@ -142,7 +145,7 @@ def initialize_wz_lattice(max_xy, max_z, sim_params, verbosity=0):
 
     if verbosity>0: 
         check_neighbors(wz_lattice) 
-    aggregate_to_xyz(wz_lattice, write_site=True, write_atoms=False, write_filename=f'{sim_params['calc_dir']}init_lattice.xyz')
+    aggregate_to_xyz(wz_lattice, write_site=True, write_atoms=False, write_filename=f"{sim_params['calc_dir']}init_lattice.xyz")
 
     return wz_lattice
     
@@ -174,8 +177,8 @@ def initialize_hex_NPL(site_list, NPL_hex_diameter, NPL_thickness, sim_params, v
     if verbosity>0:
         check_neighbors(site_list, just_atoms=True)
 
-    aggregate_to_xyz(site_list, write_site=True, write_atoms=True, write_filename=f'{sim_params['calc_dir']}init_lattice_atoms.xyz')
-    aggregate_to_xyz(site_list, write_site=False, write_atoms=True, write_filename=f'{sim_params['calc_dir']}init_atoms.xyz')
+    aggregate_to_xyz(site_list, write_site=True, write_atoms=True, write_filename=f"{sim_params['calc_dir']}init_lattice_atoms.xyz")
+    aggregate_to_xyz(site_list, write_site=False, write_atoms=True, write_filename=f"{sim_params['calc_dir']}init_atoms.xyz")
 
     return
 

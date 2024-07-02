@@ -157,7 +157,7 @@ def kmc_run(site_list, sim_params, trajectory_filename=None, write_every=20, run
         end_time = time.time()
         print(f"Trajectory written to {trajectory_filename}, elapsed time: {(end_time - start_time):.2f} seconds")
 
-    aggregate_to_xyz(site_list, write_site=False, write_atoms=True, write_filename=f'{sim_params['calc_dir']}final_atoms.xyz')
+    aggregate_to_xyz(site_list, write_site=False, write_atoms=True, write_filename=f"{sim_params['calc_dir']}final_atoms.xyz")
 
     results = {
         'total_steps': step_count,

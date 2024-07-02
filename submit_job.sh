@@ -1,3 +1,5 @@
 #!/bin/bash
 
-python run_calcs.py CALCS/test/ > CALCS/test/run.dat
+dir="CALCS/-2.0_-2.0/"
+
+python run_calcs.py "${dir}" > "${dir}run.dat"

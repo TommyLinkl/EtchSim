@@ -19,7 +19,8 @@ anionPos = np.array([[2 / 3, 1 / 3, -1 / 16],
 sim_params = {
     'calc_dir': './', 
     'epsilon': 1.0, 
-    'mu': -2.0,
+    'mu_In': -2.0,
+    'mu_P': -2.0,
     'T': 300.0, 
     'max_time': None, 
     'max_steps': None
