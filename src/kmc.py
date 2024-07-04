@@ -97,7 +97,7 @@ def kmc_run(site_list, sim_params, trajectory_filename=None, write_every=20, run
         start_time = time.time()
         delta_t = kmc_step(site_list, sim_params)
         end_time = time.time()
-        if step_count%100 == 0:
+        if step_count % write_every == 0:
             print(f"KMC step {step_count}, sim time: {total_time:.5f}, this one KMC step elapsed time: {(end_time - start_time)*1000:.2f} milli-seconds") if runtime_flag else None
         if delta_t is False:
             print("No further events can occur. Simulation stopped.")
@@ -118,8 +118,7 @@ def kmc_run(site_list, sim_params, trajectory_filename=None, write_every=20, run
             traj_In_coord.append(frame_In_coord)
             traj_P_coord.append(frame_P_coord)
             end_time = time.time()
-            if step_count%100 == 0:
-                print(f"\tRecording frame for step {step_count}, elapsed time: {(end_time - start_time)*1000:.2f} milli-seconds") if runtime_flag else None
+            print(f"\tRecording frame for step {step_count}, elapsed time: {(end_time - start_time)*1000:.2f} milli-seconds") if runtime_flag else None
         
         # Accumulate stats
 

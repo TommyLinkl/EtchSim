@@ -1,5 +1,6 @@
-import sys, time
+import sys, time, os
 import json
+import pickle
 from src.constants import *
 from src.sites import initialize_wz_lattice, initialize_hex_NPL
 from src.kmc import kmc_step, kmc_run
@@ -24,11 +25,24 @@ def main():
     # print(sim_params)
     # print(npl_params)
 
-    buffer = npl_params['buffer']      # all in AA
-    NPL_hex_diameter = npl_params['NPL_hex_diameter']
-    NPL_thickness = npl_params['NPL_thickness']
-    wz_lattice = initialize_wz_lattice(NPL_hex_diameter+buffer, NPL_thickness+buffer, sim_params, verbosity=calc_setting['verbosity'])
-    initialize_hex_NPL(wz_lattice, NPL_hex_diameter, NPL_thickness, sim_params, verbosity=calc_setting['verbosity'])
+    if npl_params['read_sites_from'] is None: 
+        buffer = npl_params['buffer']      # all in AA
+        NPL_hex_diameter = npl_params['NPL_hex_diameter']
+        NPL_thickness = npl_params['NPL_thickness']
+        wz_lattice = initialize_wz_lattice(NPL_hex_diameter+buffer, NPL_thickness+buffer, sim_params, verbosity=calc_setting['verbosity'])
+        initialize_hex_NPL(wz_lattice, NPL_hex_diameter, NPL_thickness, sim_params, verbosity=calc_setting['verbosity'])
+
+        sites_pklFileNormPath = os.path.normpath(os.path.join(sim_params['calc_dir'], sites_pklFileRelPath))
+        print(f"We are writing the wz_lattice sites list to file: {sites_pklFileNormPath}")
+        with open(sites_pklFileNormPath, 'wb') as f:
+            pickle.dump(wz_lattice, f)
+
+    else: 
+        sites_pklFileNormPath = os.path.normpath(os.path.join(sim_params['calc_dir'], npl_params['read_sites_from']))
+        print(f"WARNING: We are reading the site_list from file {sites_pklFileNormPath}. Please make sure that this desired. ")
+        with open(sites_pklFileNormPath, 'rb') as f:
+            wz_lattice = pickle.load(f)
+
 
     start_kmc_time = time.time()
     if not calc_setting['write_traj']: 

@@ -14,6 +14,7 @@ cationPos = np.array([[2 / 3, 1 / 3, -7 / 16],
 anionPos = np.array([[2 / 3, 1 / 3, -1 / 16], 
                         [1 / 3, 2 / 3, 7 / 16]]) @ unitCellVectors
 
+sites_pklFileRelPath = "../sites.pkl"
 
 # Simulation parameters, default placeholder
 sim_params = {
@@ -27,6 +28,7 @@ sim_params = {
 }
 
 npl_params = {
+    'read_sites_from': None, 
     'buffer': 20,
     'NPL_hex_diameter': 40,
     'NPL_thickness': 20
