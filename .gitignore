@@ -2,3 +2,4 @@
 CALCS*/
 *.pyc
 src/__pycache__/
+*.log

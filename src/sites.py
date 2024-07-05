@@ -1,5 +1,6 @@
 import time, os
 import numpy as np
+from typing import List
 from .constants import *
 
 class Site:
@@ -85,6 +86,28 @@ class Site:
         self.atom_k_detach = np.exp(-(epsilon * self.num_atom_neighbors + mu) / (2 * T) ) 
 
 
+class SiteXY:
+    def __init__(self, siteXY_id, site3D_ids, coordXY: np.ndarray, has_atom, neighborXY_sites_idx):
+        self.siteXY_id = siteXY_id
+        self.site3D_ids = site3D_ids
+        self.coordXY = coordXY
+        self.has_atom = has_atom
+
+        self.neighborXY_sites_idx = np.array(neighborXY_sites_idx)
+        self.neighborXY_atoms_bool = np.zeros(len(neighborXY_sites_idx), dtype=bool)
+        self.num_atom_neighborsXY = np.sum(self.neighborXY_atoms_bool)
+
+        self.measure_a1_a2_a3()
+
+
+    def measure_a1_a2_a3(self): 
+        x = self.coordXY[0]
+        y = self.coordXY[1]
+        self.a1_measure = y
+        self.a2_measure = y - np.sqrt(3)*x
+        self.a3_measure = y + np.sqrt(3)*x
+
+
 def initialize_wz_lattice(max_xy, max_z, sim_params, verbosity=0):
     """
     Initialize the large wurtzite lattice and all sites are initialized as empty. This function is specific to this usage. 
@@ -117,7 +140,7 @@ def initialize_wz_lattice(max_xy, max_z, sim_params, verbosity=0):
                         site_coord = lattice_vector + pos
                         wz_lattice.append(Site(len(wz_lattice), site_coord, False, [], sim_params, has_atom=False))
     end_time = time.time()
-    print(f"Generate large lattice, elapsed time: {(end_time - start_time):.2f} seconds")
+    print(f"Generate large lattice, elapsed time: {(end_time - start_time):.2f}s")
 
     # Partition the lattice into a 3D grid
     start_time = time.time()
@@ -141,7 +164,7 @@ def initialize_wz_lattice(max_xy, max_z, sim_params, verbosity=0):
                         neighbors.extend(grid[neighbor_grid_coord])
         site.neighbor_sites_idx = np.array([neighbor.wz_lattice_idx for neighbor in neighbors if neighbor != site and np.linalg.norm(site.real_space_coord - neighbor.real_space_coord) <= bond_length_max])
     end_time = time.time()
-    print(f"Neighbor information, elapsed time: {(end_time - start_time):.2f} seconds")
+    print(f"Neighbor information, elapsed time: {(end_time - start_time):.2f}s")
 
     if verbosity>0: 
         check_neighbors(wz_lattice) 
@@ -172,7 +195,7 @@ def initialize_hex_NPL(site_list, NPL_hex_diameter, NPL_thickness, sim_params, v
     update_whole_lattice_iteration(site_list, sim_params)
 
     end_time = time.time()
-    print(f"Initialize NPL atoms, elapsed time: {(end_time - start_time):.2f} seconds")
+    print(f"Initialize NPL atoms, elapsed time: {(end_time - start_time):.2f}s")
 
     if verbosity>0:
         check_neighbors(site_list, just_atoms=True)
@@ -355,4 +378,155 @@ def NPL_geom_boundary(site_coord, hex_diameter, thickness, NPL_center=np.array([
         part_of_NPL = True
 
     return part_of_NPL
+
+
+def project_to_XY(site_list):  # Designed to be called only once
+    coord_dict = {}
+
+    for site in site_list:
+        x, y = site.real_space_coord[:2]
+        coord = (x, y)
+        if coord not in coord_dict:
+            coord_dict[coord] = {"coordXY": np.array([x, y]), "has_atom": False, "site3D_ids": []}
+        if site.has_atom:
+            coord_dict[coord]["has_atom"] = True
+        coord_dict[coord]["site3D_ids"].append(site.wz_lattice_idx)
+
+    # Convert the dictionary to a list of SiteXY objects
+    siteXY_list = []
+    for i, (coord, info) in enumerate(coord_dict.items()):
+        thisSiteXY = SiteXY(siteXY_id=i, site3D_ids=info["site3D_ids"], coordXY=info["coordXY"], has_atom=info["has_atom"], neighborXY_sites_idx=[])
+        siteXY_list.append(thisSiteXY)
+
+    # Assign layers in a1, a2, a3 directions
+    group_XY_layers(siteXY_list)
+
+    # Partition the lattice into a 2D grid
+    grid_size = 2.5 * bond_length_max_XY   # Algorithmically, 2 * bond_length_max is enough. But I just want to be safe. 
+    grid = {}
+    for siteXY in siteXY_list:
+        grid_coord = tuple((siteXY.coordXY // grid_size).astype(int))
+        if grid_coord not in grid:
+            grid[grid_coord] = []
+        grid[grid_coord].append(siteXY)
+
+    for siteXY in siteXY_list:
+        grid_coord = tuple((siteXY.coordXY // grid_size).astype(int))
+        neighbors = []
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                neighbor_grid_coord = (grid_coord[0] + dx, grid_coord[1] + dy)
+                if neighbor_grid_coord in grid:
+                    neighbors.extend(grid[neighbor_grid_coord])
+        siteXY.neighborXY_sites_idx = np.array([neighbor.siteXY_id for neighbor in neighbors if neighbor != siteXY and np.linalg.norm(siteXY.coordXY - neighbor.coordXY) <= bond_length_max_XY])
+    
+    update_XY_projection(site_list, siteXY_list)
+
+    return siteXY_list
+
+
+def update_XY_projection(site_list, siteXY_list): 
+    for siteXY in siteXY_list: 
+        siteXY.has_atom = False
+        for site3DIdx in siteXY.site3D_ids:
+            if site_list[site3DIdx].has_atom: 
+                siteXY.has_atom = True
+                break
+    
+    for siteXY in siteXY_list: 
+        siteXY.neighborXY_atoms_bool = np.array([siteXY_list[neighbor_idx].has_atom for neighbor_idx in siteXY.neighborXY_sites_idx])
+        siteXY.num_atom_neighborsXY = np.sum(siteXY.neighborXY_atoms_bool)
+    
+    return siteXY_list
+    
+
+def write_projXY(siteXY_list, writeXY_filename='projXY_atoms.xyz', mode='all_atoms'):
+    fake_atom_species = {
+        0: 'Be', 1: 'He', 2: 'Al', 3: 'Ne', 4: 'Na'
+    }
+
+    nAtomsXY = sum(1 for siteXY in siteXY_list if siteXY.has_atom)
+    comment = "# Only atoms are written. Atoms are represented as H."
+
+    with open(writeXY_filename, "w") as file:
+        file.write(f"{nAtomsXY}\n")
+        file.write(f"{comment}\n")
+        for siteXY in siteXY_list:
+            if siteXY.has_atom: 
+                # file.write(f"H   {siteXY.coordXY[0]:.6f}   {siteXY.coordXY[1]:.6f}   0.0   {siteXY.a1_label}\n")
+                if mode=='a1_label':
+                    file.write(f"{fake_atom_species[(siteXY.a1_label)%5]}   {siteXY.coordXY[0]:.6f}   {siteXY.coordXY[1]:.6f}   0.0\n")
+                elif mode=='a2_label':
+                    file.write(f"{fake_atom_species[(siteXY.a2_label)%5]}   {siteXY.coordXY[0]:.6f}   {siteXY.coordXY[1]:.6f}   0.0\n")
+                elif mode=='a3_label':
+                    file.write(f"{fake_atom_species[(siteXY.a3_label)%5]}   {siteXY.coordXY[0]:.6f}   {siteXY.coordXY[1]:.6f}   0.0\n")
+                elif mode=='all_atoms':
+                    file.write(f"Na   {siteXY.coordXY[0]:.6f}   {siteXY.coordXY[1]:.6f}   0.0\n")
+                else: 
+                    raise NotImplementedError("We currently only allow mode to be 'a1_label', 'a2_label', 'a3_label', or 'all_atoms'. ")
+    return
+
+
+def group_XY_layers(siteXY_list, a=XY_neighbor_dist):  # Designed to be called only once, at init
+    a1_measure_list = [(siteXY.a1_measure, siteXY.siteXY_id) for siteXY in siteXY_list if siteXY.has_atom]
+    sorted_a1_measure_list = sorted(a1_measure_list, key=lambda x: x[0])
+
+    current_label = 0
+    sorted_a1_measure_list[0] = (sorted_a1_measure_list[0][0], sorted_a1_measure_list[0][1], current_label)
+    for i in range(1, len(sorted_a1_measure_list)):
+        current_measure = sorted_a1_measure_list[i][0]
+        previous_measure = sorted_a1_measure_list[i-1][0]
+
+        if np.isclose(current_measure - previous_measure, a, atol=1e-4):
+            current_label += 1
+
+        sorted_a1_measure_list[i] = (current_measure, sorted_a1_measure_list[i][1], current_label)
+
+    for siteXY in siteXY_list:
+        for measure, siteXY_id, label in sorted_a1_measure_list:
+            if siteXY.siteXY_id == siteXY_id:
+                siteXY.a1_label = label
+
+    # Repeat for a2
+    a2_measure_list = [(siteXY.a2_measure, siteXY.siteXY_id) for siteXY in siteXY_list if siteXY.has_atom]
+    sorted_a2_measure_list = sorted(a2_measure_list, key=lambda x: x[0])
+
+    current_label = 0
+    sorted_a2_measure_list[0] = (sorted_a2_measure_list[0][0], sorted_a2_measure_list[0][1], current_label)
+    for i in range(1, len(sorted_a2_measure_list)):
+        current_measure = sorted_a2_measure_list[i][0]
+        previous_measure = sorted_a2_measure_list[i-1][0]
+
+        if np.isclose(current_measure - previous_measure, 2*a, atol=1e-4):
+            current_label += 1
+
+        sorted_a2_measure_list[i] = (current_measure, sorted_a2_measure_list[i][1], current_label)
+
+    for siteXY in siteXY_list:
+        for measure, siteXY_id, label in sorted_a2_measure_list:
+            if siteXY.siteXY_id == siteXY_id:
+                siteXY.a2_label = label
+
+    # Repeat for a3
+    a3_measure_list = [(siteXY.a3_measure, siteXY.siteXY_id) for siteXY in siteXY_list if siteXY.has_atom]
+    sorted_a3_measure_list = sorted(a3_measure_list, key=lambda x: x[0])
+
+    current_label = 0
+    sorted_a3_measure_list[0] = (sorted_a3_measure_list[0][0], sorted_a3_measure_list[0][1], current_label)
+    for i in range(1, len(sorted_a3_measure_list)):
+        current_measure = sorted_a3_measure_list[i][0]
+        previous_measure = sorted_a3_measure_list[i-1][0]
+
+        if np.isclose(current_measure - previous_measure, 2*a, atol=1e-4):
+            current_label += 1
+
+        sorted_a3_measure_list[i] = (current_measure, sorted_a3_measure_list[i][1], current_label)
+
+    for siteXY in siteXY_list:
+        for measure, siteXY_id, label in sorted_a3_measure_list:
+            if siteXY.siteXY_id == siteXY_id:
+                siteXY.a3_label = label
+
+    return siteXY_list
+
 

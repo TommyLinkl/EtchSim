@@ -6,6 +6,9 @@ wz_num_neighbors = 4
 a = 4.17  # AA
 c = 6.84  # AA
 bond_length_max = 2.65  # AA, should be either 2.55 or 2.56 AA
+bond_length_max_XY = 2.60  # AA, should be 2.40755 AA. Must be smaller than 4.17000 AA. 
+XY_neighbor_dist = 2.40755  # AA
+
 unitCellVectors = np.array([[a, 0, 0], 
                             [-0.5 * a, np.sqrt(3) / 2 * a, 0], 
                             [0, 0, c]])

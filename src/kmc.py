@@ -1,7 +1,8 @@
 import time, os
 import numpy as np
+from multiprocessing import Pool, cpu_count
 from .constants import *
-from .sites import update_whole_lattice_iteration, check_neighbors, aggregate_to_xyz
+from .sites import update_whole_lattice_iteration, check_neighbors, aggregate_to_xyz, update_XY_projection, write_projXY
 
 def kmc_step(site_list, sim_params, verbosity=0):
     """
@@ -75,7 +76,7 @@ def kmc_step(site_list, sim_params, verbosity=0):
     return delta_t   # , total_rate (a float), cumulative_sum (a numpy array). 
 
 
-def kmc_run(site_list, sim_params, trajectory_filename=None, write_every=20, runtime_flag=False):
+def kmc_run(site_list, siteXY_list, sim_params, trajectory_filename=None, write_every=20, runtime_flag=False):
     """
     Perform a KMC simulation and write the trajectory to a file compatible with VMD.
 
@@ -95,10 +96,10 @@ def kmc_run(site_list, sim_params, trajectory_filename=None, write_every=20, run
 
     while True:
         start_time = time.time()
-        delta_t = kmc_step(site_list, sim_params)
+        delta_t = kmc_step(site_list, sim_params, calc_setting['verbosity'])
         end_time = time.time()
         if step_count % write_every == 0:
-            print(f"KMC step {step_count}, sim time: {total_time:.5f}, this one KMC step elapsed time: {(end_time - start_time)*1000:.2f} milli-seconds") if runtime_flag else None
+            print(f"\nKMC step {step_count}, sim time: {total_time:.5f}, this one KMC step elapsed time: {(end_time - start_time)*1000:.2f}ms") if runtime_flag else None
         if delta_t is False:
             print("No further events can occur. Simulation stopped.")
             break
@@ -118,19 +119,30 @@ def kmc_run(site_list, sim_params, trajectory_filename=None, write_every=20, run
             traj_In_coord.append(frame_In_coord)
             traj_P_coord.append(frame_P_coord)
             end_time = time.time()
-            print(f"\tRecording frame for step {step_count}, elapsed time: {(end_time - start_time)*1000:.2f} milli-seconds") if runtime_flag else None
+            print(f"\tRecording frame for step {step_count}, elapsed time: {(end_time - start_time)*1000:.2f}ms") if runtime_flag else None
         
         # Accumulate stats
+        if (step_count % write_every == 0):
+            start_time = time.time()
+            siteXY_list = update_XY_projection(site_list, siteXY_list)
+            collect_stats(site_list, siteXY_list, sim_params)
+            write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}step_{step_count}_projXY_atoms.xyz", mode='all_atoms')
+            if calc_setting['verbosity']>0:
+                write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}step_{step_count}_projXY_atoms_a1.xyz", mode='a1_label')
+                write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}step_{step_count}_projXY_atoms_a2.xyz", mode='a2_label')
+                write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}step_{step_count}_projXY_atoms_a3.xyz", mode='a3_label')
+            end_time = time.time()
+            print(f"\tAccumulate stats, elapsed time: {(end_time - start_time)*1000:.2f}ms. ")
+
+        if max_steps is not None and step_count >= max_steps:
+            print(f"\nReached the maximum number of steps: {max_steps}. Simulation stopped.\n")
+            break
+        if max_time is not None and total_time >= max_time:
+            print(f"\nReached the maximum simulation time: {max_time}. Simulation stopped.\n")
+            break
 
         total_time += delta_t
         step_count += 1
-
-        if max_steps is not None and step_count >= max_steps:
-            print(f"Reached the maximum number of steps: {max_steps}. Simulation stopped.")
-            break
-        if max_time is not None and total_time >= max_time:
-            print(f"Reached the maximum simulation time: {max_time}. Simulation stopped.")
-            break
 
     # Write the trajectory to the file
     max_In_num = max(len(inner_list) for inner_list in traj_In_coord)
@@ -154,12 +166,61 @@ def kmc_run(site_list, sim_params, trajectory_filename=None, write_every=20, run
                     else: 
                         file.write(f"P 200.0 200.0 200.0\n") 
         end_time = time.time()
-        print(f"Trajectory written to {trajectory_filename}, elapsed time: {(end_time - start_time):.2f} seconds")
+        print(f"Trajectory written to '{trajectory_filename}', elapsed time: {(end_time - start_time):.2f}s")
 
     aggregate_to_xyz(site_list, write_site=False, write_atoms=True, write_filename=f"{sim_params['calc_dir']}final_atoms.xyz")
+    siteXY_list = update_XY_projection(site_list, siteXY_list)
+    write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}final_projXY_atoms.xyz", mode='all_atoms')
+    write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}final_projXY_atoms_a1.xyz", mode='a1_label')
+    write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}final_projXY_atoms_a2.xyz", mode='a2_label')
+    write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}final_projXY_atoms_a3.xyz", mode='a3_label')
 
     results = {
         'total_steps': step_count,
         'total_time': total_time
     }
     return results
+
+
+def collect_stats(site_list, siteXY_list, sim_params): 
+    num_cation = 0
+    num_anion = 0
+    numNeighborDouble = 0
+    neighbor_3D_counts = [0, 0, 0, 0, 0]  # Store the num of sites with 0, 1, 2, 3, 4 neighbors
+    neighbor_XY_counts = [0, 0, 0, 0]  # Store the num of sites with 0, 1, 2, 3 neighbors in the XY projection
+    min_z = float('inf') 
+    max_z = float('-inf')
+
+    for site in site_list: 
+        if site.has_atom and site.cation_bool: 
+            num_cation += 1
+        
+        if site.has_atom and not site.cation_bool: 
+            num_anion += 1
+
+        if site.has_atom: 
+            numNeighborDouble += site.num_atom_neighbors
+            neighbor_3D_counts[site.num_atom_neighbors] += 1
+
+            z = site.real_space_coord[2]
+            if z < min_z:
+                min_z = z
+            if z > max_z:
+                max_z = z
+
+    for siteXY in siteXY_list: 
+        if siteXY.has_atom: 
+            neighbor_XY_counts[siteXY.num_atom_neighborsXY] += 1
+
+    energy = - sim_params['mu_In'] * num_cation - sim_params['mu_P'] * num_anion - sim_params['epsilon']*numNeighborDouble/2
+
+    stats_dict = {
+        "num_cation": num_cation, 
+        "num_anion": num_anion, 
+        "energy": energy, 
+        "neighbor_3D_counts": neighbor_3D_counts, 
+        "thickness": max_z - min_z, 
+        "neighbor_XY_counts": neighbor_XY_counts
+    }
+    # print(f"\t {stats_dict}")
+    return stats_dict
