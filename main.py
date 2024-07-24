@@ -2,8 +2,8 @@ import sys, time, os
 import json
 import pickle
 from src.constants import *
-from src.sites import initialize_wz_lattice, initialize_hex_NPL, project_to_XY, write_projXY
-from src.kmc import kmc_run
+from src.sites import initialize_wz_lattice, initialize_hex_NPL, project_to_XY, init_XYvac
+from src.kmc import kmc_run, collect_stats
 
 def load_input_from_json(filename):
     with open(filename, 'r') as file:
@@ -36,7 +36,6 @@ def main():
         print(f"\nWe are writing the wz_lattice sites list to file: {sites_pklFileNormPath}\n")
         with open(sites_pklFileNormPath, 'wb') as f:
             pickle.dump(wz_lattice, f)
-
     else: 
         sites_pklFileNormPath = os.path.normpath(os.path.join(sim_params['calc_dir'], npl_params['read_sites_from']))
         print(f"\nWARNING: We are reading the site_list from file {sites_pklFileNormPath}. Please make sure that this desired. NPL_setting -> 'buffer', 'NPL_hex_diameter', 'NPL_thickness' are all ignored. \n")
@@ -46,19 +45,17 @@ def main():
     # map to siteXY_list
     start_time = time.time()
     wz_lattice_XY = project_to_XY(wz_lattice)
+    wz_lattice_vacXY = init_XYvac(wz_lattice_XY)
+    init_stats = collect_stats(wz_lattice, wz_lattice_XY, wz_lattice_vacXY, sim_params, writeProjXY_filePrefix="init")
     end_time = time.time()
-    print(f"Project down to XY, elapsed time: {(end_time - start_time)*1000:.2f}ms. ")
-    write_projXY(wz_lattice_XY, writeXY_filename=f"{sim_params['calc_dir']}init_projXY_atoms.xyz", mode='all_atoms')
-    write_projXY(wz_lattice_XY, writeXY_filename=f"{sim_params['calc_dir']}init_projXY_atoms_a1.xyz", mode='a1_label')
-    write_projXY(wz_lattice_XY, writeXY_filename=f"{sim_params['calc_dir']}init_projXY_atoms_a2.xyz", mode='a2_label')
-    write_projXY(wz_lattice_XY, writeXY_filename=f"{sim_params['calc_dir']}init_projXY_atoms_a3.xyz", mode='a3_label')
+    print(f"Project down to XY and construct vacancies, elapsed time: {(end_time - start_time)*1000:.2f}ms. ")
 
     start_kmc_time = time.time()
     if not calc_setting['write_traj']: 
         trajFileName = None
     else: 
         trajFileName = f"{sim_params['calc_dir']}traj.xyz"
-    kmc_run(wz_lattice, wz_lattice_XY, sim_params, trajFileName, calc_setting['write_every'], runtime_flag=calc_setting['runtime_flag'])
+    kmc_run(wz_lattice, wz_lattice_XY, wz_lattice_vacXY, sim_params, trajFileName, calc_setting['write_every'], runtime_flag=calc_setting['runtime_flag'])
     end_kmc_time = time.time()
     print(f"\nDone with all KMC steps. Total elapsed time: {(end_kmc_time - start_kmc_time):.2f}s")
 

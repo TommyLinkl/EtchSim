@@ -1,8 +1,8 @@
-import time, os
+import time
 import numpy as np
 from multiprocessing import Pool, cpu_count
 from .constants import *
-from .sites import update_whole_lattice_iteration, check_neighbors, aggregate_to_xyz, update_XY_projection, write_projXY
+from .sites import update_whole_lattice_iteration, check_neighbors, aggregate_to_xyz, update_XY_projection, write_projXY, update_XYvac
 
 def kmc_step(site_list, sim_params, verbosity=0):
     """
@@ -76,7 +76,7 @@ def kmc_step(site_list, sim_params, verbosity=0):
     return delta_t   # , total_rate (a float), cumulative_sum (a numpy array). 
 
 
-def kmc_run(site_list, siteXY_list, sim_params, trajectory_filename=None, write_every=20, runtime_flag=False):
+def kmc_run(site_list, siteXY_list, vacXY_list, sim_params, trajectory_filename=None, write_every=20, runtime_flag=False):
     """
     Perform a KMC simulation and write the trajectory to a file compatible with VMD.
 
@@ -125,12 +125,8 @@ def kmc_run(site_list, siteXY_list, sim_params, trajectory_filename=None, write_
         if (step_count % write_every == 0):
             start_time = time.time()
             siteXY_list = update_XY_projection(site_list, siteXY_list)
-            collect_stats(site_list, siteXY_list, sim_params)
-            write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}step_{step_count}_projXY_atoms.xyz", mode='all_atoms')
-            if calc_setting['verbosity']>0:
-                write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}step_{step_count}_projXY_atoms_a1.xyz", mode='a1_label')
-                write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}step_{step_count}_projXY_atoms_a2.xyz", mode='a2_label')
-                write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}step_{step_count}_projXY_atoms_a3.xyz", mode='a3_label')
+            vacXY_list = update_XYvac(siteXY_list, vacXY_list)
+            collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_filePrefix=f"step_{step_count}")
             end_time = time.time()
             print(f"\tAccumulate stats, elapsed time: {(end_time - start_time)*1000:.2f}ms. ")
 
@@ -170,11 +166,8 @@ def kmc_run(site_list, siteXY_list, sim_params, trajectory_filename=None, write_
 
     aggregate_to_xyz(site_list, write_site=False, write_atoms=True, write_filename=f"{sim_params['calc_dir']}final_atoms.xyz")
     siteXY_list = update_XY_projection(site_list, siteXY_list)
-    write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}final_projXY_atoms.xyz", mode='all_atoms')
-    write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}final_projXY_atoms_a1.xyz", mode='a1_label')
-    write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}final_projXY_atoms_a2.xyz", mode='a2_label')
-    write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}final_projXY_atoms_a3.xyz", mode='a3_label')
-
+    vacXY_list = update_XYvac(siteXY_list, vacXY_list)
+    collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_filePrefix="final")
     results = {
         'total_steps': step_count,
         'total_time': total_time
@@ -182,7 +175,7 @@ def kmc_run(site_list, siteXY_list, sim_params, trajectory_filename=None, write_
     return results
 
 
-def collect_stats(site_list, siteXY_list, sim_params): 
+def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_filePrefix="init"): 
     num_cation = 0
     num_anion = 0
     numNeighborDouble = 0
@@ -190,6 +183,9 @@ def collect_stats(site_list, siteXY_list, sim_params):
     neighbor_XY_counts = [0, 0, 0, 0]  # Store the num of sites with 0, 1, 2, 3 neighbors in the XY projection
     min_z = float('inf') 
     max_z = float('-inf')
+    XY_a1_layer_counts = [0] * (max([siteXY.a1_label for siteXY in siteXY_list if siteXY.a1_label is not None])+1)   # should be 38 layers
+    XY_a2_layer_counts = [0] * (max([siteXY.a2_label for siteXY in siteXY_list if siteXY.a2_label is not None])+1)
+    XY_a3_layer_counts = [0] * (max([siteXY.a3_label for siteXY in siteXY_list if siteXY.a3_label is not None])+1)
 
     for site in site_list: 
         if site.has_atom and site.cation_bool: 
@@ -212,15 +208,37 @@ def collect_stats(site_list, siteXY_list, sim_params):
         if siteXY.has_atom: 
             neighbor_XY_counts[siteXY.num_atom_neighborsXY] += 1
 
+            XY_a1_layer_counts[siteXY.a1_label] += 1
+            XY_a2_layer_counts[siteXY.a2_label] += 1
+            XY_a3_layer_counts[siteXY.a3_label] += 1
+
     energy = - sim_params['mu_In'] * num_cation - sim_params['mu_P'] * num_anion - sim_params['epsilon']*numNeighborDouble/2
 
+    write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms.xyz", mode='all_atoms')
+    if (calc_setting['verbosity']>0) or (writeProjXY_filePrefix=="init") or (writeProjXY_filePrefix=="final"):
+        write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms_a1.xyz", mode='a1_label')
+        write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms_a2.xyz", mode='a2_label')
+        write_projXY(siteXY_list, writeXY_filename=f"{sim_params['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms_a3.xyz", mode='a3_label')
+
+    # Vacancy stats to match experiments
+    vacNeighbors_counts = [0, 0, 0, 0, 0, 0, 0]  # Store the num of sites with 0, 1, 2, 3, 4, 5, 6 neighbors
+    for vacXY in vacXY_list: 
+        if vacXY.light_up: 
+            print(vacXY.num_litUp_neighborsVacXY)
+            vacNeighbors_counts[vacXY.num_litUp_neighborsVacXY] += 1
+
+    
     stats_dict = {
         "num_cation": num_cation, 
         "num_anion": num_anion, 
         "energy": energy, 
         "neighbor_3D_counts": neighbor_3D_counts, 
         "thickness": max_z - min_z, 
-        "neighbor_XY_counts": neighbor_XY_counts
+        "neighbor_XY_counts": neighbor_XY_counts, 
+        "XY_a1_layer_counts": XY_a1_layer_counts, 
+        "XY_a2_layer_counts": XY_a2_layer_counts, 
+        "XY_a3_layer_counts": XY_a3_layer_counts, 
+        "vacNeighbors_counts": vacNeighbors_counts, 
     }
-    # print(f"\t {stats_dict}")
+    print(f"\t {stats_dict}")
     return stats_dict

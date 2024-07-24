@@ -1,6 +1,5 @@
-import time, os
+import time
 import numpy as np
-from typing import List
 from .constants import *
 
 class Site:
@@ -99,6 +98,9 @@ class SiteXY:
 
         self.measure_a1_a2_a3()
 
+        self.a1_label = None
+        self.a2_label = None
+        self.a3_label = None
 
     def measure_a1_a2_a3(self): 
         x = self.coordXY[0]
@@ -106,6 +108,18 @@ class SiteXY:
         self.a1_measure = y
         self.a2_measure = y - np.sqrt(3)*x
         self.a3_measure = y + np.sqrt(3)*x
+
+
+class VacXY:
+    def __init__(self, vacXY_id, siteXY_ids, coordXY: np.ndarray, light_up: bool, neighborXY_vac_idx):
+        self.vacXY_id = vacXY_id
+        self.siteXY_ids = siteXY_ids
+        self.coordXY = coordXY
+        self.light_up = light_up
+
+        self.neighborXY_vac_idx = np.array(neighborXY_vac_idx)
+        self.neighborXY_vac_litUp_bool = np.zeros(len(neighborXY_vac_idx), dtype=bool)
+        self.num_litUp_neighborsVacXY = np.sum(self.neighborXY_vac_litUp_bool)
 
 
 def initialize_wz_lattice(max_xy, max_z, sim_params, verbosity=0):
@@ -381,6 +395,18 @@ def NPL_geom_boundary(site_coord, hex_diameter, thickness, NPL_center=np.array([
 
 
 def project_to_XY(site_list):  # Designed to be called only once
+    """
+    Projects the 3D lattice sites into 2D lattice sites, while keeping 
+    all the important information for collecting statistics. 
+
+    This function is slow and thus only designed to be called once at
+    initialization. Later calls will rely on "update_XY_projection". 
+
+    site_list: a list of 3D lattice sites, each element is an instance 
+    of Site. 
+    siteXY_list: a list of 2D projections, each element is an instance 
+    of SiteXY. 
+    """
     coord_dict = {}
 
     for site in site_list:
@@ -399,7 +425,7 @@ def project_to_XY(site_list):  # Designed to be called only once
         siteXY_list.append(thisSiteXY)
 
     # Assign layers in a1, a2, a3 directions
-    group_XY_layers(siteXY_list)
+    siteXY_list = group_XY_layers(siteXY_list)
 
     # Partition the lattice into a 2D grid
     grid_size = 2.5 * bond_length_max_XY   # Algorithmically, 2 * bond_length_max is enough. But I just want to be safe. 
@@ -426,6 +452,11 @@ def project_to_XY(site_list):  # Designed to be called only once
 
 
 def update_XY_projection(site_list, siteXY_list): 
+    """
+    Updates the 2D projection (siteXY_list) according to the changes in 
+    the 3D lattice sites (site_list). Explicit return of the 2D projection 
+    is given. 
+    """
     for siteXY in siteXY_list: 
         siteXY.has_atom = False
         for site3DIdx in siteXY.site3D_ids:
@@ -446,7 +477,7 @@ def write_projXY(siteXY_list, writeXY_filename='projXY_atoms.xyz', mode='all_ato
     }
 
     nAtomsXY = sum(1 for siteXY in siteXY_list if siteXY.has_atom)
-    comment = "# Only atoms are written. Atoms are represented as H."
+    comment = "# Only atoms are written. Atom types are only placeholders for easy visualization. "
 
     with open(writeXY_filename, "w") as file:
         file.write(f"{nAtomsXY}\n")
@@ -464,6 +495,26 @@ def write_projXY(siteXY_list, writeXY_filename='projXY_atoms.xyz', mode='all_ato
                     file.write(f"Na   {siteXY.coordXY[0]:.6f}   {siteXY.coordXY[1]:.6f}   0.0\n")
                 else: 
                     raise NotImplementedError("We currently only allow mode to be 'a1_label', 'a2_label', 'a3_label', or 'all_atoms'. ")
+    return
+
+
+def write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename='vacXY.xyz'):
+    fake_atom_species = {
+        0: 'Be', 1: 'He', 2: 'Al', 3: 'Ne', 4: 'Na'
+    }
+
+    nAtomsXY = sum(1 for siteXY in siteXY_list if siteXY.has_atom) + len(vacXY_list)
+    comment = "# Comments"
+
+    with open(writeFilename, "w") as file:
+        file.write(f"{nAtomsXY}\n")
+        file.write(f"{comment}\n")
+        for siteXY in siteXY_list:
+            if siteXY.has_atom: 
+                file.write(f"{fake_atom_species[0]}   {siteXY.coordXY[0]:.6f}   {siteXY.coordXY[1]:.6f}   0.0\n")
+        for vacXY in vacXY_list: 
+            file. write(f"{fake_atom_species[1]}   {vacXY.coordXY[0]:.6f}   {vacXY.coordXY[1]:.6f}   0.0\n")
+
     return
 
 
@@ -529,4 +580,119 @@ def group_XY_layers(siteXY_list, a=XY_neighbor_dist):  # Designed to be called o
 
     return siteXY_list
 
+
+def init_XYvac(siteXY_list):  # Designed to be called only once
+    """
+    Converts the 2D lattice sites into 2D vacancies, while keeping
+    all the important information for collecting statistics.
+
+    siteXY_list: a list of 2D projections, each element is an instance
+    of SiteXY.
+    vacXY_list: a list of 2D vacancies, each element is an instance of
+    vacXY.
+    """
+    vacCoordDict = {}
+    existing_XYCoordSet = set()  # Using a set for faster lookup
+    max_XOrY = -99999999.9
+
+    # First pass: fill vacCoordDict and existing_XYCoordSet
+    for siteXY in siteXY_list:
+        x, y = siteXY.coordXY
+        coord = (x, y)
+        existing_XYCoordSet.add(coord)
+        max_XOrY = max(x, y, max_XOrY)
+
+        # From the 2D sites, for each site, go one up and one down by "XY_neighbor_dist". No repeated entries.
+        vac_coord_1 = (x, y - XY_neighbor_dist)
+        vac_coord_2 = (x, y + XY_neighbor_dist)
+        if vac_coord_1 not in vacCoordDict:
+            vacCoordDict[vac_coord_1] = {"coordXY": np.array(vac_coord_1), "light_up": False, "siteXY_ids": [siteXY.siteXY_id]}
+        if vac_coord_2 not in vacCoordDict:
+            vacCoordDict[vac_coord_2] = {"coordXY": np.array(vac_coord_2), "light_up": False, "siteXY_ids": [siteXY.siteXY_id]}
+
+    # Remove all the entries that are on a siteXY
+    tol = 5e-3
+    keys_to_remove = [key for key in vacCoordDict if any((abs(key[0] - coord[0]) <= tol) and (abs(key[1] - coord[1]) <= tol) for coord in existing_XYCoordSet)]
+    for key in keys_to_remove:
+        del vacCoordDict[key]
+    # Also remove the outmost layer
+    keys_to_remove = [key for key in vacCoordDict if ((abs(key[0]) >= max_XOrY - a) or (abs(key[1]) >= max_XOrY - a))]
+    for key in keys_to_remove:
+        del vacCoordDict[key]
+
+    # Deal with siteXY_ids information. 
+    # Vacancies are neighbors, iff they have overlapping parent XYsites 
+    for key in vacCoordDict: 
+        zeroNN = vacCoordDict[key]['siteXY_ids']
+        
+        firstNN_indices = [siteXY_list[i].neighborXY_sites_idx for i in zeroNN]
+        firstNN = np.unique(np.concatenate(firstNN_indices))
+        
+        secondNN_indices = [siteXY_list[i].neighborXY_sites_idx for i in firstNN]
+        secondNN = np.unique(np.concatenate(secondNN_indices))
+        
+        thirdNN_indices = [siteXY_list[i].neighborXY_sites_idx for i in secondNN]
+        thirdNN = np.unique(np.concatenate(thirdNN_indices))
+
+        allNN = np.unique(np.concatenate([zeroNN, firstNN, secondNN, thirdNN]))
+        
+        for siteXY_idx in allNN: 
+            siteXY = siteXY_list[siteXY_idx]
+            if np.linalg.norm(np.array(key) - np.array(siteXY.coordXY))<= 1.4 * XY_neighbor_dist: 
+                if siteXY_idx not in vacCoordDict[key]['siteXY_ids']:
+                    vacCoordDict[key]['siteXY_ids'].append(siteXY.siteXY_id)
+
+        # Add in a check. It shouldn't be longer than 6. Most should be 6. Manual checking looks all good. 
+        # print(vacCoordDict[key]['siteXY_ids'])
+
+    # Convert the dictionary to a list of SiteXY objects
+    vacXY_list = []
+    for i, (coord, info) in enumerate(vacCoordDict.items()):
+        thisVacXY = VacXY(vacXY_id=i, siteXY_ids=info["siteXY_ids"], coordXY=info["coordXY"], light_up=info["light_up"], neighborXY_vac_idx=[])
+        vacXY_list.append(thisVacXY)
+
+    # Partition the lattice into a 2D grid. Deal with vacancy neighboring information. 
+    grid_size = 2.5 * a
+    grid = {}
+    for vacXY in vacXY_list:
+        grid_coord = tuple((vacXY.coordXY // grid_size).astype(int))
+        if grid_coord not in grid:
+            grid[grid_coord] = []
+        grid[grid_coord].append(vacXY)
+
+    for vacXY in vacXY_list:
+        grid_coord = tuple((vacXY.coordXY // grid_size).astype(int))
+        neighbors = []
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                neighbor_grid_coord = (grid_coord[0] + dx, grid_coord[1] + dy)
+                if neighbor_grid_coord in grid:
+                    neighbors.extend(grid[neighbor_grid_coord])
+        vacXY.neighborXY_vac_idx = np.array([neighbor.vacXY_id for neighbor in neighbors if neighbor != vacXY and np.linalg.norm(vacXY.coordXY - neighbor.coordXY) <= (1.1 * a)])
+    
+    update_XYvac(siteXY_list, vacXY_list)
+
+    return vacXY_list
+
+
+def update_XYvac(siteXY_list, vacXY_list): 
+    """
+    Updates the 2D vacancies (vacXY_list) according to the changes in 
+    the 2D lattice sites (siteXY_list). Explicit return. 
+    """
+    for vacXY in vacXY_list: 
+        vacXY.light_up = False
+        lightUpCount = 0
+        for siteXYIdx in vacXY.siteXY_ids:
+            if siteXY_list[siteXYIdx].has_atom: 
+                lightUpCount += 1
+        if lightUpCount >= 5: 
+            vacXY.light_up = True
+    
+        vacXY.neighborXY_vac_litUp_bool = np.array([vacXY_list[neighbor_idx].light_up for neighbor_idx in vacXY.neighborXY_vac_idx])
+        vacXY.num_litUp_neighborsVacXY = np.sum(vacXY.neighborXY_vac_litUp_bool)
+
+        print(vacXY.neighborXY_vac_idx)
+
+    return vacXY_list
 
