@@ -1,5 +1,6 @@
 import time
 import numpy as np
+from scipy.spatial import KDTree
 from .constants import *
 
 class Site:
@@ -120,6 +121,19 @@ class VacXY:
         self.neighborXY_vac_idx = np.array(neighborXY_vac_idx)
         self.neighborXY_vac_litUp_bool = np.zeros(len(neighborXY_vac_idx), dtype=bool)
         self.num_litUp_neighborsVacXY = np.sum(self.neighborXY_vac_litUp_bool)
+
+        self.measure_a1_a2_a3()
+
+        self.a1_label = None
+        self.a2_label = None
+        self.a3_label = None
+
+    def measure_a1_a2_a3(self): 
+        x = self.coordXY[0]
+        y = self.coordXY[1]
+        self.a1_measure = y
+        self.a2_measure = y - np.sqrt(3)*x
+        self.a3_measure = y + np.sqrt(3)*x
 
 
 def initialize_wz_lattice(max_xy, max_z, sim_params, verbosity=0):
@@ -425,7 +439,7 @@ def project_to_XY(site_list):  # Designed to be called only once
         siteXY_list.append(thisSiteXY)
 
     # Assign layers in a1, a2, a3 directions
-    siteXY_list = group_XY_layers(siteXY_list)
+    siteXY_list = group_XY_layers(siteXY_list, mode='siteXY')
 
     # Partition the lattice into a 2D grid
     grid_size = 2.5 * bond_length_max_XY   # Algorithmically, 2 * bond_length_max is enough. But I just want to be safe. 
@@ -471,7 +485,7 @@ def update_XY_projection(site_list, siteXY_list):
     return siteXY_list
     
 
-def write_projXY(siteXY_list, writeXY_filename='projXY_atoms.xyz', mode='all_atoms'):
+def write_projXY(siteXY_list, writeFilename='projXY_atoms.xyz', mode='all_atoms'):
     fake_atom_species = {
         0: 'Be', 1: 'He', 2: 'Al', 3: 'Ne', 4: 'Na'
     }
@@ -479,7 +493,7 @@ def write_projXY(siteXY_list, writeXY_filename='projXY_atoms.xyz', mode='all_ato
     nAtomsXY = sum(1 for siteXY in siteXY_list if siteXY.has_atom)
     comment = "# Only atoms are written. Atom types are only placeholders for easy visualization. "
 
-    with open(writeXY_filename, "w") as file:
+    with open(writeFilename, "w") as file:
         file.write(f"{nAtomsXY}\n")
         file.write(f"{comment}\n")
         for siteXY in siteXY_list:
@@ -498,29 +512,23 @@ def write_projXY(siteXY_list, writeXY_filename='projXY_atoms.xyz', mode='all_ato
     return
 
 
-def write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename='vacXY.xyz'):
-    fake_atom_species = {
-        0: 'Be', 1: 'He', 2: 'Al', 3: 'Ne', 4: 'Na'
-    }
-
-    nAtomsXY = sum(1 for siteXY in siteXY_list if siteXY.has_atom) + len(vacXY_list)
-    comment = "# Comments"
-
-    with open(writeFilename, "w") as file:
-        file.write(f"{nAtomsXY}\n")
-        file.write(f"{comment}\n")
-        for siteXY in siteXY_list:
-            if siteXY.has_atom: 
-                file.write(f"{fake_atom_species[0]}   {siteXY.coordXY[0]:.6f}   {siteXY.coordXY[1]:.6f}   0.0\n")
-        for vacXY in vacXY_list: 
-            file. write(f"{fake_atom_species[1]}   {vacXY.coordXY[0]:.6f}   {vacXY.coordXY[1]:.6f}   0.0\n")
-
-    return
-
-
-def group_XY_layers(siteXY_list, a=XY_neighbor_dist):  # Designed to be called only once, at init
-    a1_measure_list = [(siteXY.a1_measure, siteXY.siteXY_id) for siteXY in siteXY_list if siteXY.has_atom]
+def group_XY_layers(list, mode="siteXY"):  # Designed to be called only once, at init
+    if mode=='siteXY':
+        dist = XY_neighbor_dist
+    elif mode=='vacXY': 
+        dist = 1.5 * XY_neighbor_dist
+    
+    if mode=='siteXY':
+        a1_measure_list = [(siteXY.a1_measure, siteXY.siteXY_id) for siteXY in list if siteXY.has_atom]
+        a2_measure_list = [(siteXY.a2_measure, siteXY.siteXY_id) for siteXY in list if siteXY.has_atom]
+        a3_measure_list = [(siteXY.a3_measure, siteXY.siteXY_id) for siteXY in list if siteXY.has_atom]
+    elif mode=='vacXY': 
+        a1_measure_list = [(vacXY.a1_measure, vacXY.vacXY_id) for vacXY in list if vacXY.light_up]
+        a2_measure_list = [(vacXY.a2_measure, vacXY.vacXY_id) for vacXY in list if vacXY.light_up]
+        a3_measure_list = [(vacXY.a3_measure, vacXY.vacXY_id) for vacXY in list if vacXY.light_up]
     sorted_a1_measure_list = sorted(a1_measure_list, key=lambda x: x[0])
+    sorted_a2_measure_list = sorted(a2_measure_list, key=lambda x: x[0])
+    sorted_a3_measure_list = sorted(a3_measure_list, key=lambda x: x[0])
 
     current_label = 0
     sorted_a1_measure_list[0] = (sorted_a1_measure_list[0][0], sorted_a1_measure_list[0][1], current_label)
@@ -528,60 +536,80 @@ def group_XY_layers(siteXY_list, a=XY_neighbor_dist):  # Designed to be called o
         current_measure = sorted_a1_measure_list[i][0]
         previous_measure = sorted_a1_measure_list[i-1][0]
 
-        if np.isclose(current_measure - previous_measure, a, atol=1e-4):
+        if np.isclose(current_measure - previous_measure, dist, atol=1e-4):
             current_label += 1
 
         sorted_a1_measure_list[i] = (current_measure, sorted_a1_measure_list[i][1], current_label)
 
-    for siteXY in siteXY_list:
-        for measure, siteXY_id, label in sorted_a1_measure_list:
-            if siteXY.siteXY_id == siteXY_id:
-                siteXY.a1_label = label
+    if mode=='siteXY':
+        for siteXY in list:
+            for measure, siteXY_id, label in sorted_a1_measure_list:
+                if siteXY.siteXY_id == siteXY_id:
+                    siteXY.a1_label = label
+    elif mode=='vacXY': 
+        for vacXY in list:
+            for measure, vacXY_id, label in sorted_a1_measure_list:
+                if vacXY.vacXY_id == vacXY_id:
+                    vacXY.a1_label = label
+
 
     # Repeat for a2
-    a2_measure_list = [(siteXY.a2_measure, siteXY.siteXY_id) for siteXY in siteXY_list if siteXY.has_atom]
-    sorted_a2_measure_list = sorted(a2_measure_list, key=lambda x: x[0])
-
     current_label = 0
     sorted_a2_measure_list[0] = (sorted_a2_measure_list[0][0], sorted_a2_measure_list[0][1], current_label)
     for i in range(1, len(sorted_a2_measure_list)):
         current_measure = sorted_a2_measure_list[i][0]
         previous_measure = sorted_a2_measure_list[i-1][0]
 
-        if np.isclose(current_measure - previous_measure, 2*a, atol=1e-4):
+        if np.isclose(current_measure - previous_measure, 2*dist, atol=1e-4):
             current_label += 1
 
         sorted_a2_measure_list[i] = (current_measure, sorted_a2_measure_list[i][1], current_label)
 
-    for siteXY in siteXY_list:
-        for measure, siteXY_id, label in sorted_a2_measure_list:
-            if siteXY.siteXY_id == siteXY_id:
-                siteXY.a2_label = label
+    if mode=='siteXY':
+        for siteXY in list:
+            for measure, siteXY_id, label in sorted_a2_measure_list:
+                if siteXY.siteXY_id == siteXY_id:
+                    siteXY.a2_label = label
+    elif mode=='vacXY': 
+        for vacXY in list:
+            for measure, vacXY_id, label in sorted_a2_measure_list:
+                if vacXY.vacXY_id == vacXY_id:
+                    vacXY.a2_label = label
 
     # Repeat for a3
-    a3_measure_list = [(siteXY.a3_measure, siteXY.siteXY_id) for siteXY in siteXY_list if siteXY.has_atom]
-    sorted_a3_measure_list = sorted(a3_measure_list, key=lambda x: x[0])
-
     current_label = 0
     sorted_a3_measure_list[0] = (sorted_a3_measure_list[0][0], sorted_a3_measure_list[0][1], current_label)
     for i in range(1, len(sorted_a3_measure_list)):
         current_measure = sorted_a3_measure_list[i][0]
         previous_measure = sorted_a3_measure_list[i-1][0]
 
-        if np.isclose(current_measure - previous_measure, 2*a, atol=1e-4):
+        if np.isclose(current_measure - previous_measure, 2*dist, atol=1e-4):
             current_label += 1
 
         sorted_a3_measure_list[i] = (current_measure, sorted_a3_measure_list[i][1], current_label)
 
-    for siteXY in siteXY_list:
-        for measure, siteXY_id, label in sorted_a3_measure_list:
-            if siteXY.siteXY_id == siteXY_id:
-                siteXY.a3_label = label
+    if mode=='siteXY':
+        for siteXY in list:
+            for measure, siteXY_id, label in sorted_a3_measure_list:
+                if siteXY.siteXY_id == siteXY_id:
+                    siteXY.a3_label = label
+    elif mode=='vacXY': 
+        for vacXY in list:
+            for measure, vacXY_id, label in sorted_a3_measure_list:
+                if vacXY.vacXY_id == vacXY_id:
+                    vacXY.a3_label = label
 
-    return siteXY_list
+    return list
 
 
-def init_XYvac(siteXY_list):  # Designed to be called only once
+def is_approx_equal(coord, dict_keys, tol=1e-4):
+    for key in dict_keys:
+        if np.allclose(coord, key, atol=tol):
+            return key
+    return None
+
+
+def init_XYvac(siteXY_list, verbosity=0):  # Designed to be called only once
     """
     Converts the 2D lattice sites into 2D vacancies, while keeping
     all the important information for collecting statistics.
@@ -609,16 +637,44 @@ def init_XYvac(siteXY_list):  # Designed to be called only once
             vacCoordDict[vac_coord_1] = {"coordXY": np.array(vac_coord_1), "light_up": False, "siteXY_ids": [siteXY.siteXY_id]}
         if vac_coord_2 not in vacCoordDict:
             vacCoordDict[vac_coord_2] = {"coordXY": np.array(vac_coord_2), "light_up": False, "siteXY_ids": [siteXY.siteXY_id]}
+        '''
+        key_1 = is_approx_equal(vac_coord_1, vacCoordDict.keys())
+        key_2 = is_approx_equal(vac_coord_2, vacCoordDict.keys())
+        if key_1 is None:
+            vacCoordDict[vac_coord_1] = {"coordXY": np.array(vac_coord_1), "light_up": False, "siteXY_ids": [siteXY.siteXY_id]}
+        if key_2 is None:
+            vacCoordDict[vac_coord_2] = {"coordXY": np.array(vac_coord_2), "light_up": False, "siteXY_ids": [siteXY.siteXY_id]}
+        '''
 
     # Remove all the entries that are on a siteXY
+    print(len(vacCoordDict)) if verbosity>0 else None
     tol = 5e-3
     keys_to_remove = [key for key in vacCoordDict if any((abs(key[0] - coord[0]) <= tol) and (abs(key[1] - coord[1]) <= tol) for coord in existing_XYCoordSet)]
     for key in keys_to_remove:
         del vacCoordDict[key]
+    print(len(vacCoordDict)) if verbosity>0 else None
+
+    # Remove all entries that are too close to each other
+    coords = list(vacCoordDict.keys())
+
+    # Build a k-d tree
+    kd_tree = KDTree(coords)
+    pairs_to_remove = kd_tree.query_pairs(tol)
+    keys_to_remove = set()
+
+    # Add the second element of each pair to the keys_to_remove set
+    for key1_idx, key2_idx in pairs_to_remove:
+        keys_to_remove.add(coords[key2_idx])
+
+    for key in keys_to_remove:
+        del vacCoordDict[key]
+    print(len(vacCoordDict)) if verbosity>0 else None
+
     # Also remove the outmost layer
     keys_to_remove = [key for key in vacCoordDict if ((abs(key[0]) >= max_XOrY - a) or (abs(key[1]) >= max_XOrY - a))]
     for key in keys_to_remove:
         del vacCoordDict[key]
+    print(len(vacCoordDict)) if verbosity>0 else None
 
     # Deal with siteXY_ids information. 
     # Vacancies are neighbors, iff they have overlapping parent XYsites 
@@ -652,7 +708,7 @@ def init_XYvac(siteXY_list):  # Designed to be called only once
         vacXY_list.append(thisVacXY)
 
     # Partition the lattice into a 2D grid. Deal with vacancy neighboring information. 
-    grid_size = 2.5 * a
+    grid_size = 2.1 * a
     grid = {}
     for vacXY in vacXY_list:
         grid_coord = tuple((vacXY.coordXY // grid_size).astype(int))
@@ -668,9 +724,12 @@ def init_XYvac(siteXY_list):  # Designed to be called only once
                 neighbor_grid_coord = (grid_coord[0] + dx, grid_coord[1] + dy)
                 if neighbor_grid_coord in grid:
                     neighbors.extend(grid[neighbor_grid_coord])
-        vacXY.neighborXY_vac_idx = np.array([neighbor.vacXY_id for neighbor in neighbors if neighbor != vacXY and np.linalg.norm(vacXY.coordXY - neighbor.coordXY) <= (1.1 * a)])
+        vacXY.neighborXY_vac_idx = np.array([neighbor.vacXY_id for neighbor in neighbors if (neighbor != vacXY and np.linalg.norm(vacXY.coordXY - neighbor.coordXY) <= 1.1*a)])
     
     update_XYvac(siteXY_list, vacXY_list)
+
+    # Assign layers in a1, a2, a3 directions
+    vacXY_list = group_XY_layers(vacXY_list, mode='vacXY')
 
     return vacXY_list
 
@@ -692,7 +751,41 @@ def update_XYvac(siteXY_list, vacXY_list):
         vacXY.neighborXY_vac_litUp_bool = np.array([vacXY_list[neighbor_idx].light_up for neighbor_idx in vacXY.neighborXY_vac_idx])
         vacXY.num_litUp_neighborsVacXY = np.sum(vacXY.neighborXY_vac_litUp_bool)
 
-        print(vacXY.neighborXY_vac_idx)
-
     return vacXY_list
+
+
+def write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename='vacXY.xyz', mode='all_vac'):
+    # 'all_vac', 'lit_vac', 'lit_vac_a1', 'lit_vac_a2', 'lit_vac_a3'
+    fake_atom_species = {
+        0: 'Be', 1: 'He', 2: 'Al', 3: 'Ne', 4: 'Na'
+    }
+
+    if mode=='all_vac':
+        nAtomsXY = sum(1 for siteXY in siteXY_list if siteXY.has_atom) + len(vacXY_list)
+    else: 
+        nAtomsXY = sum(1 for siteXY in siteXY_list if siteXY.has_atom) + sum(1 for vacXY in vacXY_list if vacXY.light_up)
+    comment = "# Atoms are represented as H. The vacancies are represented as Be, or looped for each a1/a2/a3 layer. "
+
+    with open(writeFilename, "w") as file:
+        file.write(f"{nAtomsXY}\n")
+        file.write(f"{comment}\n")
+        for siteXY in siteXY_list:
+            if siteXY.has_atom: 
+                file.write(f"H   {siteXY.coordXY[0]:.6f}   {siteXY.coordXY[1]:.6f}   0.0\n")
+        for vacXY in vacXY_list: 
+            if mode=='all_vac':
+                file.write(f"{fake_atom_species[0]}   {vacXY.coordXY[0]:.6f}   {vacXY.coordXY[1]:.6f}   0.0\n")
+            elif mode=='lit_vac': 
+                if vacXY.light_up: 
+                    file.write(f"{fake_atom_species[0]}   {vacXY.coordXY[0]:.6f}   {vacXY.coordXY[1]:.6f}   0.0\n")
+            elif mode=='lit_vac_a1': 
+                if vacXY.light_up: 
+                    file.write(f"{fake_atom_species[(vacXY.a1_label)%5]}   {vacXY.coordXY[0]:.6f}   {vacXY.coordXY[1]:.6f}   0.0\n")
+            elif mode=='lit_vac_a2': 
+                if vacXY.light_up: 
+                    file.write(f"{fake_atom_species[(vacXY.a2_label)%5]}   {vacXY.coordXY[0]:.6f}   {vacXY.coordXY[1]:.6f}   0.0\n")
+            elif mode=='lit_vac_a3': 
+                if vacXY.light_up: 
+                    file.write(f"{fake_atom_species[(vacXY.a3_label)%5]}   {vacXY.coordXY[0]:.6f}   {vacXY.coordXY[1]:.6f}   0.0\n")
+    return
 

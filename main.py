@@ -45,7 +45,7 @@ def main():
     # map to siteXY_list
     start_time = time.time()
     wz_lattice_XY = project_to_XY(wz_lattice)
-    wz_lattice_vacXY = init_XYvac(wz_lattice_XY)
+    wz_lattice_vacXY = init_XYvac(wz_lattice_XY, verbosity=calc_setting['verbosity'])
     init_stats = collect_stats(wz_lattice, wz_lattice_XY, wz_lattice_vacXY, sim_params, writeProjXY_filePrefix="init")
     end_time = time.time()
     print(f"Project down to XY and construct vacancies, elapsed time: {(end_time - start_time)*1000:.2f}ms. ")
