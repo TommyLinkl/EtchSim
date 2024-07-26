@@ -636,7 +636,7 @@ class VacXY:
         self.a3_measure = y + np.sqrt(3)*x
 
 
-def init_XYvac(siteXY_list, verbosity=0):  # Designed to be called only once
+def init_XYvac(siteXY_list):  # Designed to be called only once
     """
     Converts the 2D lattice sites into 2D vacancies, while keeping
     all the important information for collecting statistics.
@@ -666,12 +666,12 @@ def init_XYvac(siteXY_list, verbosity=0):  # Designed to be called only once
             vacCoordDict[vac_coord_2] = {"coordXY": np.array(vac_coord_2), "light_up": False, "siteXY_ids": [siteXY.siteXY_id]}
 
     # Remove all the entries that are on a siteXY
-    print(len(vacCoordDict)) if verbosity>0 else None
+    print(len(vacCoordDict)) if calc_setting['verbosity']>0 else None
     tol = 5e-3
     keys_to_remove = [key for key in vacCoordDict if any((abs(key[0] - coord[0]) <= tol) and (abs(key[1] - coord[1]) <= tol) for coord in existing_XYCoordSet)]
     for key in keys_to_remove:
         del vacCoordDict[key]
-    print(len(vacCoordDict)) if verbosity>0 else None
+    print(len(vacCoordDict)) if calc_setting['verbosity']>0 else None
 
     # Remove all entries that are too close to each other
     coords = list(vacCoordDict.keys())
@@ -687,13 +687,13 @@ def init_XYvac(siteXY_list, verbosity=0):  # Designed to be called only once
 
     for key in keys_to_remove:
         del vacCoordDict[key]
-    print(len(vacCoordDict)) if verbosity>0 else None
+    print(len(vacCoordDict)) if calc_setting['verbosity']>0 else None
 
     # Also remove the outmost layer
     keys_to_remove = [key for key in vacCoordDict if ((abs(key[0]) >= max_XOrY - a) or (abs(key[1]) >= max_XOrY - a))]
     for key in keys_to_remove:
         del vacCoordDict[key]
-    print(len(vacCoordDict)) if verbosity>0 else None
+    print(len(vacCoordDict)) if calc_setting['verbosity']>0 else None
 
     # Deal with siteXY_ids information. 
     # Vacancies are neighbors, iff they have overlapping parent XYsites 

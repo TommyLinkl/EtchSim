@@ -42,22 +42,24 @@ def main():
         with open(sites_pklFileNormPath, 'rb') as f:
             wz_lattice = pickle.load(f)
 
-    # map to siteXY_list
+    # map to siteXY_list and vacXY_list
     start_time = time.time()
     wz_lattice_XY = project_to_XY(wz_lattice)
-    wz_lattice_vacXY = init_XYvac(wz_lattice_XY, verbosity=calc_setting['verbosity'])
+    wz_lattice_vacXY = init_XYvac(wz_lattice_XY)
     init_stats = collect_stats(wz_lattice, wz_lattice_XY, wz_lattice_vacXY, sim_params, writeProjXY_filePrefix="init")
     end_time = time.time()
-    print(f"Project down to XY and construct vacancies, elapsed time: {(end_time - start_time)*1000:.2f}ms. ")
+    print(f"Project down to XY and construct vacancies, elapsed time: {(end_time - start_time):.5f}s. ")
+    with open(f"{sim_params['calc_dir']}init_site_list.pkl", 'wb') as f:
+        pickle.dump(wz_lattice, f)
+    with open(f"{sim_params['calc_dir']}init_siteXY_list.pkl", 'wb') as f:
+        pickle.dump(wz_lattice_XY, f)
+    with open(f"{sim_params['calc_dir']}init_vacXY_list.pkl", 'wb') as f:
+        pickle.dump(wz_lattice_vacXY, f)
 
     start_kmc_time = time.time()
-    if not calc_setting['write_traj']: 
-        trajFileName = None
-    else: 
-        trajFileName = f"{sim_params['calc_dir']}traj.xyz"
-    kmc_run(wz_lattice, wz_lattice_XY, wz_lattice_vacXY, sim_params, trajFileName, calc_setting['write_every'], runtime_flag=calc_setting['runtime_flag'])
+    kmc_run(wz_lattice, wz_lattice_XY, wz_lattice_vacXY, sim_params, calc_setting['write_every'], runtime_flag=calc_setting['runtime_flag'])
     end_kmc_time = time.time()
-    print(f"\nDone with all KMC steps. Total elapsed time: {(end_kmc_time - start_kmc_time):.2f}s")
+    print(f"\nDone with all KMC steps. Total elapsed time: {(end_kmc_time - start_kmc_time):.5f}s")
 
 
 ######################################################

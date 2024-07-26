@@ -8,6 +8,7 @@ c = 6.84  # AA
 bond_length_max = 2.65  # AA, should be either 2.55 or 2.56 AA
 bond_length_max_XY = 2.60  # AA, should be 2.40755 AA. Must be smaller than 4.17000 AA. 
 XY_neighbor_dist = 2.40755  # AA
+veryFar = 300.0 
 
 unitCellVectors = np.array([[a, 0, 0], 
                             [-0.5 * a, np.sqrt(3) / 2 * a, 0], 
@@ -20,6 +21,20 @@ anionPos = np.array([[2 / 3, 1 / 3, -1 / 16],
 sites_pklFileRelPath = "../sites.pkl"
 
 # Simulation parameters, default placeholder
+calc_setting = {
+    'verbosity': 0, 
+    'runtime_flag': 0, 
+    'write_every': 50, 
+    "process_stats_now": 0      # Default, store information and do post processing
+}
+
+npl_params = {
+    'read_sites_from': None, 
+    'buffer': 30,
+    'NPL_hex_diameter': 160,
+    'NPL_thickness': 40
+}
+
 sim_params = {
     'calc_dir': './', 
     'epsilon': 1.0, 
@@ -28,18 +43,4 @@ sim_params = {
     'T': 300.0, 
     'max_time': None, 
     'max_steps': None
-}
-
-npl_params = {
-    'read_sites_from': None, 
-    'buffer': 20,
-    'NPL_hex_diameter': 40,
-    'NPL_thickness': 20
-}
-
-calc_setting = {
-    'verbosity': 0, 
-    'runtime_flag': 0, 
-    'write_traj': 0, 
-    'write_every': 50
 }
