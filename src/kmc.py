@@ -17,13 +17,17 @@ def kmc_step(site_list, sim_params, verbosity=0):
     float or bool: The time increment if the step was successful, or False if no further events can occur.
     """
 
-    # Initialize arrays for available events
+    # Collect available events
+    start_time = time.time()
+
     event_types = []
     event_siteID = []
     event_rates = []
 
-    # Collect available events
     for site in site_list:
+        if not site.ready_to_attach and not site.ready_to_detach:
+            continue
+
         if site.ready_to_attach and not site.ready_to_detach:
             event_types.append("a")                   # "a" for attachment
             event_siteID.append(site.wz_lattice_idx)  # Site index
@@ -42,12 +46,18 @@ def kmc_step(site_list, sim_params, verbosity=0):
     if len(event_rates) == 0:
         print("There are no available events. Thus, Gillespie algorithm can't proceed. ")
         return False
+    end_time = time.time()
+    print(f"\tCollect available events: {(end_time - start_time)*1000:.2f}ms") if verbosity > 1 else None
 
     # Calculate total rate and cumulative sum of rates
+    start_time = time.time()
     total_rate = np.sum(event_rates)
     cumulative_sum = np.cumsum(event_rates)
+    end_time = time.time()
+    print(f"\tCalculate total rate and cumulative sum of rates: {(end_time - start_time)*1000:.2f}ms") if verbosity > 1 else None
 
     # Generate random numbers for event selection and time increment
+    start_time = time.time()
     r1 = np.random.random()
     delta_t = -np.log(r1) / total_rate  # Time increment based on total rate
     
@@ -58,8 +68,11 @@ def kmc_step(site_list, sim_params, verbosity=0):
     selected_site = site_list[selected_site_idx]
     if verbosity>0:
         print(f"\tAt this iteration, we have selected to perform '{selected_event_type}' event on site {selected_site_idx}. ")
+    end_time = time.time()
+    print(f"\tChoose event: {(end_time - start_time)*1000:.2f}ms") if verbosity > 1 else None
 
     # Perform the selected event (attachment or detachment)
+    start_time = time.time()
     if selected_event_type == "a":
         selected_site.update_site_occupation_only(True, verbosity)
     elif selected_event_type == "d":
@@ -67,9 +80,14 @@ def kmc_step(site_list, sim_params, verbosity=0):
     selected_site.iteration_changed = True
     for neighbor_idx in selected_site.neighbor_sites_idx:
         site_list[neighbor_idx].iteration_changed = True
+    end_time = time.time()
+    print(f"\tPerform event: {(end_time - start_time)*1000:.2f}ms") if verbosity > 1 else None
 
     # Update the entire lattice for the current iteration
+    start_time = time.time()
     update_whole_lattice_iteration(site_list, sim_params)
+    end_time = time.time()
+    print(f"\tUpdate the entire lattice for the current iteration: {(end_time - start_time)*1000:.2f}ms\n") if verbosity > 1 else None
 
     if verbosity>0:
         check_neighbors(site_list, just_atoms=True)
@@ -92,9 +110,9 @@ def kmc_run(site_list, siteXY_list, vacXY_list, sim_params, write_every=20, runt
     total_time = 0.0
     step_count = 0
 
-    trajFileName_zip = f"{sim_params['calc_dir']}traj.xyz.gz"
-    trajXYFileName = f"{sim_params['calc_dir']}trajXY.xyz"
-    trajVacFileName = f"{sim_params['calc_dir']}trajVac.xyz"
+    trajFileName_zip = f"{calc_setting['calc_dir']}traj.xyz.gz"
+    trajXYFileName = f"{calc_setting['calc_dir']}trajXY.xyz"
+    trajVacFileName = f"{calc_setting['calc_dir']}trajVac.xyz"
     with open(trajFileName_zip, 'w') as f:
         pass
     with open(trajXYFileName, 'w') as f:
@@ -106,7 +124,7 @@ def kmc_run(site_list, siteXY_list, vacXY_list, sim_params, write_every=20, runt
     stats_list = []
 
     # Store information for post-processing
-    forLaterStatsFileName = f"{sim_params['calc_dir']}forStatsLater.csv.gz"
+    forLaterStatsFileName = f"{calc_setting['calc_dir']}forStatsLater.csv.gz"
     with gzip.open(forLaterStatsFileName, 'wt', newline='') as file:
         writer = csv.writer(file)
         header = ['stepNum', 'time'] + [f'site_{i}' for i in range(len(site_list))]
@@ -220,7 +238,7 @@ def kmc_run(site_list, siteXY_list, vacXY_list, sim_params, write_every=20, runt
     end_time = time.time()
     print(f"Trajectory (3D) written to '{trajFileName_zip}', elapsed time: {(end_time - start_time):.2f}s")
 
-    aggregate_to_xyz(site_list, write_site=False, write_atoms=True, write_filename=f"{sim_params['calc_dir']}final_atoms.xyz") if calc_setting['verbosity']>0 else None
+    aggregate_to_xyz(site_list, write_site=False, write_atoms=True, write_filename=f"{calc_setting['calc_dir']}final_atoms.xyz") if calc_setting['verbosity']>0 else None
     if calc_setting['process_stats_now']!=0:
         siteXY_list = update_XY_projection(site_list, siteXY_list)
         vacXY_list = update_XYvac(siteXY_list, vacXY_list)
@@ -231,7 +249,7 @@ def kmc_run(site_list, siteXY_list, vacXY_list, sim_params, write_every=20, runt
 
     if calc_setting['process_stats_now']!=0:
         # Dump the stats in a json file
-        with open(f"{sim_params['calc_dir']}stats.json", 'w') as file:
+        with open(f"{calc_setting['calc_dir']}stats.json", 'w') as file:
             # json.dump(stats_list, file, indent=4)
             json.dump(stats_list, file, separators=(',', ':'))
 
@@ -296,16 +314,16 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
     energy = - sim_params['mu_In'] * num_cation - sim_params['mu_P'] * num_anion - sim_params['epsilon']*numNeighborDouble/2
 
     if (calc_setting['verbosity']>0) and ((writeProjXY_filePrefix=="init") or (writeProjXY_filePrefix=="final")):
-        write_projXY(siteXY_list, writeFilename=f"{sim_params['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms.xyz", mode='all_atoms')
-        write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename=f"{sim_params['calc_dir']}{writeProjXY_filePrefix}_vacXY_lit.xyz", mode='lit_vac')
+        write_projXY(siteXY_list, writeFilename=f"{calc_setting['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms.xyz", mode='all_atoms')
+        write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename=f"{calc_setting['calc_dir']}{writeProjXY_filePrefix}_vacXY_lit.xyz", mode='lit_vac')
     if (calc_setting['verbosity']>1) and (writeProjXY_filePrefix=="init") :
-        write_projXY(siteXY_list, writeFilename=f"{sim_params['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms_a1.xyz", mode='a1_label')
-        write_projXY(siteXY_list, writeFilename=f"{sim_params['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms_a2.xyz", mode='a2_label')
-        write_projXY(siteXY_list, writeFilename=f"{sim_params['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms_a3.xyz", mode='a3_label')
+        write_projXY(siteXY_list, writeFilename=f"{calc_setting['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms_a1.xyz", mode='a1_label')
+        write_projXY(siteXY_list, writeFilename=f"{calc_setting['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms_a2.xyz", mode='a2_label')
+        write_projXY(siteXY_list, writeFilename=f"{calc_setting['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms_a3.xyz", mode='a3_label')
 
-        write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename=f"{sim_params['calc_dir']}{writeProjXY_filePrefix}_vacXY_lit_a1.xyz", mode='lit_vac_a1')
-        write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename=f"{sim_params['calc_dir']}{writeProjXY_filePrefix}_vacXY_lit_a2.xyz", mode='lit_vac_a2')
-        write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename=f"{sim_params['calc_dir']}{writeProjXY_filePrefix}_vacXY_lit_a3.xyz", mode='lit_vac_a3')    
+        write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename=f"{calc_setting['calc_dir']}{writeProjXY_filePrefix}_vacXY_lit_a1.xyz", mode='lit_vac_a1')
+        write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename=f"{calc_setting['calc_dir']}{writeProjXY_filePrefix}_vacXY_lit_a2.xyz", mode='lit_vac_a2')
+        write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename=f"{calc_setting['calc_dir']}{writeProjXY_filePrefix}_vacXY_lit_a3.xyz", mode='lit_vac_a3')    
 
     stats_dict = {
         "num_cation": num_cation, 

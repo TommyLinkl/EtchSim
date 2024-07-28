@@ -22,10 +22,12 @@ sites_pklFileRelPath = "../sites.pkl"
 
 # Simulation parameters, default placeholder
 calc_setting = {
+    'calc_dir': './', 
     'verbosity': 0, 
     'runtime_flag': 0, 
     'write_every': 50, 
-    "process_stats_now": 0      # Default, store information and do post processing
+    'process_stats_now': 0,       # Default, store information and do post processing
+    'random_seed': 32
 }
 
 npl_params = {
@@ -36,7 +38,6 @@ npl_params = {
 }
 
 sim_params = {
-    'calc_dir': './', 
     'epsilon': 1.0, 
     'mu_In': -2.0,
     'mu_P': -2.0,

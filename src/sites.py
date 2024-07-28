@@ -146,7 +146,7 @@ def initialize_wz_lattice(max_xy, max_z, sim_params, verbosity=0):
 
     if verbosity>0: 
         check_neighbors(wz_lattice) 
-    aggregate_to_xyz(wz_lattice, write_site=True, write_atoms=False, write_filename=f"{sim_params['calc_dir']}init_lattice.xyz")
+    aggregate_to_xyz(wz_lattice, write_site=True, write_atoms=False, write_filename=f"{calc_setting['calc_dir']}init_lattice.xyz")
 
     return wz_lattice
     
@@ -178,8 +178,8 @@ def initialize_hex_NPL(site_list, NPL_hex_diameter, NPL_thickness, sim_params, v
     if verbosity>0:
         check_neighbors(site_list, just_atoms=True)
 
-    aggregate_to_xyz(site_list, write_site=True, write_atoms=True, write_filename=f"{sim_params['calc_dir']}init_lattice_atoms.xyz")
-    aggregate_to_xyz(site_list, write_site=False, write_atoms=True, write_filename=f"{sim_params['calc_dir']}init_atoms.xyz")
+    aggregate_to_xyz(site_list, write_site=True, write_atoms=True, write_filename=f"{calc_setting['calc_dir']}init_lattice_atoms.xyz")
+    aggregate_to_xyz(site_list, write_site=False, write_atoms=True, write_filename=f"{calc_setting['calc_dir']}init_atoms.xyz")
 
     return
 
@@ -192,16 +192,18 @@ def update_whole_lattice_iteration(site_list, sim_params):
     site_list (list of Site): The list of Site instances.
     """
     for site in site_list:
-        if site.iteration_changed:
-            site.neighbor_atoms_bool = np.array([site_list[neighbor_idx].has_atom for neighbor_idx in site.neighbor_sites_idx])
-            site.num_atom_neighbors = np.sum(site.neighbor_atoms_bool)
-            
-            site.update_ready_to_attach()
-            site.update_ready_to_detach()
-            site.update_rates(sim_params)
-            
-            # Reset the iteration_changed status
-            site.iteration_changed = False
+        if not site.iteration_changed:
+            continue
+
+        site.neighbor_atoms_bool = np.array([site_list[neighbor_idx].has_atom for neighbor_idx in site.neighbor_sites_idx])
+        site.num_atom_neighbors = np.sum(site.neighbor_atoms_bool)
+        
+        site.update_ready_to_attach()
+        site.update_ready_to_detach()
+        site.update_rates(sim_params)
+        
+        # Reset the iteration_changed status
+        site.iteration_changed = False
 
 
 def aggregate_to_xyz(site_list, write_site=True, write_atoms=True, write_filename='init_lattice_atoms.xyz'):

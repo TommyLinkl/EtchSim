@@ -10,20 +10,20 @@ def postprocessing():
     if len(sys.argv) != 2:
         print("Usage: python postproc.py CALC_DIR/")
         return
-    sim_params['calc_dir'] = sys.argv[1]
+    calc_setting['calc_dir'] = sys.argv[1]
     load_input_from_json(f"{sys.argv[1]}input.json")
 
     # Read in site_list, siteXY_list, vacXY_list from pickle files and construct these lists
     start_time = time.time()
-    with open(f'{sim_params['calc_dir']}init_site_list.pkl', 'rb') as f:
+    with open(f'{calc_setting['calc_dir']}init_site_list.pkl', 'rb') as f:
         wz_lattice = pickle.load(f)
-    with open(f'{sim_params['calc_dir']}init_siteXY_list.pkl', 'rb') as f:
+    with open(f'{calc_setting['calc_dir']}init_siteXY_list.pkl', 'rb') as f:
         wz_lattice_XY = pickle.load(f)
-    with open(f'{sim_params['calc_dir']}init_vacXY_list.pkl', 'rb') as f:
+    with open(f'{calc_setting['calc_dir']}init_vacXY_list.pkl', 'rb') as f:
         wz_lattice_vacXY = pickle.load(f)
 
     # Read in forStatsLater.csv.gz using pandas
-    data_df = pd.read_csv(f"{sim_params['calc_dir']}forStatsLater.csv.gz", compression='gzip')
+    data_df = pd.read_csv(f"{calc_setting['calc_dir']}forStatsLater.csv.gz", compression='gzip')
     # print(data_df.columns.tolist())
     
     # Check if each data row is of length len(wz_lattice) + 2
@@ -54,7 +54,7 @@ def postprocessing():
         stats_list.append(stats)
 
     # Dump the stats in a json file
-    with open(f"{sim_params['calc_dir']}postproc_stats.json", 'w') as file:
+    with open(f"{calc_setting['calc_dir']}postproc_stats.json", 'w') as file:
         json.dump(stats_list, file, separators=(',', ':'))
     end_time = time.time()
     print(f"\nDone with post-processing stats. Elapsed time: {(end_time - start_time):.5f}s")
