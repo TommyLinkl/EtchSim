@@ -47,6 +47,8 @@ def main():
     init_stats = collect_stats(wz_lattice, wz_lattice_XY, wz_lattice_vacXY, sim_params, writeProjXY_filePrefix="init")
     end_time = time.time()
     print(f"Project down to XY and construct vacancies, elapsed time: {(end_time - start_time):.5f}s. ")
+
+    # Write out data for post-processing
     with open(f"{calc_setting['calc_dir']}init_site_list.pkl", 'wb') as f:
         pickle.dump(wz_lattice, f)
     with open(f"{calc_setting['calc_dir']}init_siteXY_list.pkl", 'wb') as f:

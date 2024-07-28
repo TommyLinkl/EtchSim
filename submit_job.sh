@@ -14,8 +14,13 @@
 
 source ~/.bashrc
 
-dir="CALCS_diam15.4_thick3.5/-2.0_-2.0/"
+dir="CALCS_diam15.4_thick3.5/test/"  # "CALCS_diam15.4_thick3.5/-4.0_-4.0/"
 
-nohup python main.py "${dir}" > "${dir}run.dat" &
+scratch_dir="$SCRATCH/EtchSim/$dir"
+echo $scratch_dir
+mkdir -p "$scratch_dir"
 
+nohup python main.py "${scratch_dir}" > "${dir}run.dat" &
 # nohup python postproc.py "${dir}" > "${dir}run.dat" &
+wait
+cp -r "$scratch_dir"/* "$dir"

@@ -1,6 +1,7 @@
 import sys, time, os
 import pickle, csv, gzip, json
 import pandas as pd
+from tqdm import tqdm
 from src.constants import *
 from main import load_input_from_json
 from src.sites import update_whole_lattice_iteration, update_XY_projection, update_XYvac
@@ -31,12 +32,13 @@ def postprocessing():
     if not all(len(row) == expected_length for row in data_df.itertuples(index=False)):
         raise ValueError("Error: Data row length does not match expected length.")
     end_time = time.time()
-    print(f"\nDone with reading struct_lists and data. Elapsed time: {(end_time - start_time):.5f}s")
+    print(f"\nDone with reading struct_lists and data. Elapsed time: {(end_time - start_time):.5f}s = {(end_time - start_time)/60:.2f}min")
 
     # For each frame, update the lattice and collect stats
     start_time = time.time()
     stats_list = []
-    for row in data_df.itertuples(index=False):
+    for row in tqdm(data_df.itertuples(index=False), total=len(data_df), desc="Processing Rows"):
+    # for row in data_df.itertuples(index=False):
         step_num = int(row[0])
         simTime = float(row[1])
 
@@ -57,7 +59,7 @@ def postprocessing():
     with open(f"{calc_setting['calc_dir']}postproc_stats.json", 'w') as file:
         json.dump(stats_list, file, separators=(',', ':'))
     end_time = time.time()
-    print(f"\nDone with post-processing stats. Elapsed time: {(end_time - start_time):.5f}s")
+    print(f"\nDone with post-processing stats. Elapsed time: {(end_time - start_time):.5f}s = {(end_time - start_time)/60:.2f}min")
 
 
 ######################################################
