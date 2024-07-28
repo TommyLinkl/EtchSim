@@ -16,4 +16,6 @@ source ~/.bashrc
 
 dir="CALCS_diam15.4_thick3.5/-2.0_-2.0/"
 
-python main.py "${dir}" > "${dir}run.dat"
+nohup python main.py "${dir}" > "${dir}run.dat" &
+
+# nohup python postproc.py "${dir}" > "${dir}run.dat" &

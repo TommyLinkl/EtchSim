@@ -16,14 +16,12 @@ def load_input_from_json(filename):
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: python run_calc.py CALC_DIR/")
+        print("Usage: python main.py CALC_DIR/")
         return
     
     np.random.seed(32)
     sim_params['calc_dir'] = sys.argv[1]
     load_input_from_json(f"{sys.argv[1]}input.json")
-    # print(sim_params)
-    # print(npl_params)
 
     if npl_params['read_sites_from'] is None: 
         buffer = npl_params['buffer']      # all in AA
