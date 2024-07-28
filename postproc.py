@@ -16,11 +16,11 @@ def postprocessing():
 
     # Read in site_list, siteXY_list, vacXY_list from pickle files and construct these lists
     start_time = time.time()
-    with open(f'{calc_setting['calc_dir']}init_site_list.pkl', 'rb') as f:
+    with open(f"{calc_setting['calc_dir']}init_site_list.pkl", 'rb') as f:
         wz_lattice = pickle.load(f)
-    with open(f'{calc_setting['calc_dir']}init_siteXY_list.pkl', 'rb') as f:
+    with open(f"{calc_setting['calc_dir']}init_siteXY_list.pkl", 'rb') as f:
         wz_lattice_XY = pickle.load(f)
-    with open(f'{calc_setting['calc_dir']}init_vacXY_list.pkl', 'rb') as f:
+    with open(f"{calc_setting['calc_dir']}init_vacXY_list.pkl", 'rb') as f:
         wz_lattice_vacXY = pickle.load(f)
 
     # Read in forStatsLater.csv.gz using pandas
