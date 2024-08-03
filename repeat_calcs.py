@@ -4,8 +4,8 @@ import json
 import random
 
 # Constants
-source_dir = './CALCS_diam15.4_thick3.5/-4.0_-4.0'
-destination_template = './CALCS_diam15.4_thick3.5/-4.0_-4.0_repeat_{}'
+source_dir = './CALCS_diam15.4_thick3.5/-2.5_-2.5'
+destination_template = './CALCS_diam15.4_thick3.5/-2.5_-2.5_repeat_{}'
 json_filename = 'input.json'
 
 def update_json_file(file_path, random_seed):
