@@ -495,13 +495,23 @@ def group_XY_layers(list, mode="siteXY"):  # Designed to be called only once, at
         dist = 1.5 * XY_neighbor_dist
     
     if mode=='siteXY':
+        '''
         a1_measure_list = [(siteXY.a1_measure, siteXY.siteXY_id) for siteXY in list if siteXY.has_atom]
         a2_measure_list = [(siteXY.a2_measure, siteXY.siteXY_id) for siteXY in list if siteXY.has_atom]
         a3_measure_list = [(siteXY.a3_measure, siteXY.siteXY_id) for siteXY in list if siteXY.has_atom]
+        '''
+        a1_measure_list = [(siteXY.a1_measure, siteXY.siteXY_id) for siteXY in list]
+        a2_measure_list = [(siteXY.a2_measure, siteXY.siteXY_id) for siteXY in list]
+        a3_measure_list = [(siteXY.a3_measure, siteXY.siteXY_id) for siteXY in list]
     elif mode=='vacXY': 
+        '''
         a1_measure_list = [(vacXY.a1_measure, vacXY.vacXY_id) for vacXY in list if vacXY.light_up]
         a2_measure_list = [(vacXY.a2_measure, vacXY.vacXY_id) for vacXY in list if vacXY.light_up]
         a3_measure_list = [(vacXY.a3_measure, vacXY.vacXY_id) for vacXY in list if vacXY.light_up]
+        '''
+        a1_measure_list = [(vacXY.a1_measure, vacXY.vacXY_id) for vacXY in list]
+        a2_measure_list = [(vacXY.a2_measure, vacXY.vacXY_id) for vacXY in list]
+        a3_measure_list = [(vacXY.a3_measure, vacXY.vacXY_id) for vacXY in list]
     sorted_a1_measure_list = sorted(a1_measure_list, key=lambda x: x[0])
     sorted_a2_measure_list = sorted(a2_measure_list, key=lambda x: x[0])
     sorted_a3_measure_list = sorted(a3_measure_list, key=lambda x: x[0])

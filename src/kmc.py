@@ -111,13 +111,13 @@ def kmc_run(site_list, siteXY_list, vacXY_list, sim_params, write_every=20, runt
     step_count = 0
 
     trajFileName_zip = f"{calc_setting['calc_dir']}traj.xyz.gz"
-    trajXYFileName = f"{calc_setting['calc_dir']}trajXY.xyz"
-    trajVacFileName = f"{calc_setting['calc_dir']}trajVac.xyz"
+    # trajXYFileName_zip = f"{calc_setting['calc_dir']}trajXY.xyz.gz"
+    trajVacFileName_zip = f"{calc_setting['calc_dir']}trajVac.xyz.gz"
     with open(trajFileName_zip, 'w') as f:
         pass
-    with open(trajXYFileName, 'w') as f:
-        pass
-    with open(trajVacFileName, 'w') as f:
+    # with open(trajXYFileName_zip, 'w') as f:
+    #     pass
+    with open(trajVacFileName_zip, 'w') as f:
         pass
     traj_In_coord = []
     traj_P_coord = []
@@ -179,8 +179,9 @@ def kmc_run(site_list, siteXY_list, vacXY_list, sim_params, write_every=20, runt
             traj_P_coord.append(frame_P_coord)
 
             if calc_setting['process_stats_now']!=0:
+                ''' # Now redundant
                 # Record projected XY_trajectory
-                with open(trajXYFileName, 'a') as file:
+                with gzip.open(trajXYFileName_zip, 'at') as file:
                     file.write(f"{len(siteXY_list)}\n")
                     file.write("Frame\n")
                     for siteXY in siteXY_list: 
@@ -188,9 +189,10 @@ def kmc_run(site_list, siteXY_list, vacXY_list, sim_params, write_every=20, runt
                             file.write(f"Na {siteXY.coordXY[0]} {siteXY.coordXY[1]} 0.0\n")
                         else: 
                             file.write(f"Na {veryFar} {veryFar} 0.0\n")
+                '''
 
                 # Record vacXY_trajectory
-                with open(trajVacFileName, 'a') as file:
+                with gzip.open(trajVacFileName_zip, 'at') as file:
                     file.write(f"{len(siteXY_list) + len(vacXY_list)}\n")
                     file.write("Frame\n")
                     for siteXY in siteXY_list: 

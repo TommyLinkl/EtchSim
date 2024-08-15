@@ -37,6 +37,12 @@ def postprocessing():
     # For each frame, update the lattice and collect stats
     start_time = time.time()
     stats_list = []
+    # trajXYFileName_zip = f"{calc_setting['calc_dir']}trajXY.xyz.gz"
+    # with open(trajXYFileName_zip, 'w') as f:
+    #     pass
+    trajVacFileName_zip = f"{calc_setting['calc_dir']}trajVac.xyz.gz"
+    with open(trajVacFileName_zip, 'w') as f:
+        pass
     for row in tqdm(data_df.itertuples(index=False), total=len(data_df), desc="Processing Rows"):
     # for row in data_df.itertuples(index=False):
         step_num = int(row[0])
@@ -49,6 +55,33 @@ def postprocessing():
         update_XY_projection(wz_lattice, wz_lattice_XY)
         update_XYvac(wz_lattice_XY, wz_lattice_vacXY)
         
+        ''' # Now redundant
+        # Record projected XY_trajectory
+        with gzip.open(trajXYFileName_zip, 'at') as file:
+            file.write(f"{len(wz_lattice_XY)}\n")
+            file.write("Frame\n")
+            for siteXY in wz_lattice_XY: 
+                if siteXY.has_atom: 
+                    file.write(f"Na {siteXY.coordXY[0]} {siteXY.coordXY[1]} 0.0\n")
+                else: 
+                    file.write(f"Na {veryFar} {veryFar} 0.0\n")
+        '''
+
+        # Record vacXY_trajectory
+        with gzip.open(trajVacFileName_zip, 'at') as file:
+            file.write(f"{len(wz_lattice_XY) + len(wz_lattice_vacXY)}\n")
+            file.write("Frame\n")
+            for siteXY in wz_lattice_XY: 
+                if siteXY.has_atom: 
+                    file.write(f"H {siteXY.coordXY[0]} {siteXY.coordXY[1]} 0.0\n")
+                else: 
+                    file.write(f"H {veryFar} {veryFar} 0.0\n")
+            for vacXY in wz_lattice_vacXY: 
+                if vacXY.light_up: 
+                    file.write(f"Be {vacXY.coordXY[0]} {vacXY.coordXY[1]} 0.0\n")
+                else: 
+                    file.write(f"Be {veryFar} {veryFar} 0.0\n")
+
         # Collect stats
         stats = collect_stats(wz_lattice, wz_lattice_XY, wz_lattice_vacXY, sim_params, writeProjXY_filePrefix=f"step_{step_num}")
         stats['stepNum'] = step_num
@@ -56,7 +89,7 @@ def postprocessing():
         stats_list.append(stats)
 
     # Dump the stats in a json file
-    with open(f"{calc_setting['calc_dir']}postproc_stats.json", 'w') as file:
+    with open(f"{calc_setting['calc_dir']}stats.json", 'w') as file:
         json.dump(stats_list, file, separators=(',', ':'))
     end_time = time.time()
     print(f"\nDone with post-processing stats. Elapsed time: {(end_time - start_time):.5f}s = {(end_time - start_time)/60:.2f}min")

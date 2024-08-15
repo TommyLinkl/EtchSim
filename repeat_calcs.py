@@ -4,8 +4,8 @@ import json
 import random
 
 # Constants
-source_dir = './CALCS_diam15.4_thick3.5/-2.5_-2.5'
-destination_template = './CALCS_diam15.4_thick3.5/-2.5_-2.5_repeat_{}'
+source_dir = './CALCS_diam15.4_thick3.5/-2.0_-2.0'
+destination_template = './CALCS_diam15.4_thick3.5/-2.0_-2.0_repeat_{}'
 json_filename = 'input.json'
 
 def update_json_file(file_path, random_seed):
@@ -28,4 +28,4 @@ def repeat_calcs(nRepeat):
         update_json_file(json_file_path, random_seed)
 
 ########################
-repeat_calcs(32)
+repeat_calcs(16)
