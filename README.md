@@ -37,8 +37,9 @@ The simulation requires an input JSON file (`input.json`) that specifies various
   - **`process_stats_now`**: Flag to determine if statistics should be processed immediately (1 to process, 0 to delay and do postprocessing).
   - **`random_seed`**: Seed for random number generation in the kinetic Monte Carlo process to ensure reproducibility.
 
-- **`NPL_setting`**: Specifies the path to the file containing lattice site data.
-  - **`read_sites_from`**: Path to the `.pkl` file that contains the site information (e.g., `"../sites.pkl"`).
+- **`NPL_setting`**: Specifies the information for generating the lattice site.
+  - **`read_sites_from`**: If the lattice has been previously generated, it would automatically save to this filepath. Then, the user can simply give the path to the `.pkl` file that contains the site information (e.g., `"../sites.pkl"`) without generating the lattice information in every run. 
+  - **`NPL_thickness`**, **`NPL_hex_diameter`**, **`buffer`**: specify the thickness, diameter and buffer area size for the NPL construction. 
 
 - **`sim_params`**: Contains parameters for the simulation. Please see the section below for parameter details. 
   - **`epsilon`** ($\epsilon$): Bonding energy parameter, usually set to 1 as the unit of energy. Estimated range: 0.1-0.5 eV.
@@ -55,7 +56,7 @@ Theoretical simulation is used to support the observed etching mechanism. Furthe
 
 ## Simulation Details
 
-The simulation uses the Gillespie Algorithm. At each step, the surface semiconductor atoms' detachment and attachment rates are calculated. The total rate and cumulative sum are calculated, which were then used to determine the time increment and select events randomly. The lattice information is updated after each iteration. This is then repeated until no atoms (or no more detachment or attachment events are available). 
+The simulation uses the Gillespie Algorithm. At each step, the surface semiconductor atoms' detachment and attachment rates are calculated. The total rate and cumulative sum are calculated, which were then used to determine the time increment and select events randomly. The lattice information is updated after each iteration. This is then repeated until no atoms (or no more detachment or attachment events) are available. 
 
 ### Performance
 
