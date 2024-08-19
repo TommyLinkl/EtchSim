@@ -5,3 +5,4 @@ src/__pycache__/
 *.log
 repeat*
 check_and_remove_pkl.sh
+PLOTS/
