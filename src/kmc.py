@@ -2,6 +2,7 @@ import time
 import numpy as np
 import json, csv, gzip
 from multiprocessing import Pool, cpu_count
+from scipy.spatial import ConvexHull
 from .constants import *
 from .sites import update_whole_lattice_iteration, check_neighbors, aggregate_to_xyz, update_XY_projection, write_projXY, update_XYvac, write_XY_sites_vac
 
@@ -103,7 +104,7 @@ def kmc_run(site_list, siteXY_list, vacXY_list, sim_params, write_every=20, runt
     site_list (list of Site): The lattice containing all Site instances.
     sim_params (dict): Dictionary containing simulation parameters ('epsilon', 'mu', 'T', 'max_steps', 'max_time').
     """
-
+    ################################# initialize #################################
     # Initialize variables
     max_steps = sim_params.get('max_steps')
     max_time = sim_params.get('max_time')
@@ -130,7 +131,66 @@ def kmc_run(site_list, siteXY_list, vacXY_list, sim_params, write_every=20, runt
         header = ['stepNum', 'time'] + [f'site_{i}' for i in range(len(site_list))]
         writer.writerow(header)
 
-    while True:
+    ################################# KMC step 0 #################################
+    update_whole_lattice_iteration(site_list, sim_params)
+    if calc_setting['process_stats_now']!=0:
+        # Accumulate stats
+        start_time = time.time()
+
+        siteXY_list = update_XY_projection(site_list, siteXY_list)
+        vacXY_list = update_XYvac(siteXY_list, vacXY_list)
+
+        stats = collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_filePrefix=f"step_{step_count}")
+        stats['stepNum'] = step_count
+        stats['simTime'] = total_time
+        stats_list.append(stats)
+
+        end_time = time.time()
+        print(f"\tAccumulate stats, elapsed time: {(end_time - start_time)*1000:.2f}ms. ")
+
+    # Store data (3D positions) for post-processing
+    row = [step_count, total_time] + [int(site.has_atom) for site in site_list]
+    with gzip.open(forLaterStatsFileName, 'at', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(row)
+
+    # Record the positions of this step for plottable trajectory
+    start_time = time.time()
+    # Record 3D positions 
+    frame_In_coord = []
+    frame_P_coord = []
+    for site in site_list:
+        if (site.has_atom) and ((site.ready_to_detach) or any(site_list[neighborIdx].ready_to_detach for neighborIdx in site.neighbor_sites_idx)):
+            coord = site.real_space_coord
+            if site.cation_bool:
+                frame_In_coord.append(f"In {coord[0]} {coord[1]} {coord[2]}")
+            else:
+                frame_P_coord.append(f"P {coord[0]} {coord[1]} {coord[2]}")
+    traj_In_coord.append(frame_In_coord)
+    traj_P_coord.append(frame_P_coord)
+
+    if calc_setting['process_stats_now']!=0:
+        # Record vacXY_trajectory
+        with gzip.open(trajVacFileName_zip, 'at') as file:
+            file.write(f"{len(siteXY_list) + len(vacXY_list)}\n")
+            file.write("Frame\n")
+            for siteXY in siteXY_list: 
+                if siteXY.has_atom: 
+                    file.write(f"H {siteXY.coordXY[0]} {siteXY.coordXY[1]} 0.0\n")
+                else: 
+                    file.write(f"H {veryFar} {veryFar} 0.0\n")
+            for vacXY in vacXY_list: 
+                if vacXY.light_up: 
+                    file.write(f"Be {vacXY.coordXY[0]} {vacXY.coordXY[1]} 0.0\n")
+                else: 
+                    file.write(f"Be {veryFar} {veryFar} 0.0\n")
+
+    end_time = time.time()
+    print(f"\tRecording frame for step {step_count}, elapsed time: {(end_time - start_time)*1000:.2f}ms") if runtime_flag else None
+
+    ################################# KMC step 1+ #################################
+    while True: 
+        # Make a kmc_step move. 
         start_time = time.time()
         delta_t = kmc_step(site_list, sim_params, calc_setting['verbosity'])
         end_time = time.time()
@@ -139,6 +199,8 @@ def kmc_run(site_list, siteXY_list, vacXY_list, sim_params, write_every=20, runt
         if delta_t is False:
             print("No further events can occur. Simulation stopped.")
             break
+        total_time += delta_t
+        step_count += 1
 
         if (step_count % write_every == 0):
             if calc_setting['process_stats_now']!=0:
@@ -215,9 +277,6 @@ def kmc_run(site_list, siteXY_list, vacXY_list, sim_params, write_every=20, runt
         if max_time is not None and total_time >= max_time:
             print(f"\nReached the maximum simulation time: {max_time}. Simulation stopped.\n")
             break
-
-        total_time += delta_t
-        step_count += 1
 
     # Write the trajectory to the file
     max_In_num = max(len(inner_list) for inner_list in traj_In_coord)
@@ -327,6 +386,66 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
         write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename=f"{calc_setting['calc_dir']}{writeProjXY_filePrefix}_vacXY_lit_a2.xyz", mode='lit_vac_a2')
         write_XY_sites_vac(siteXY_list, vacXY_list, writeFilename=f"{calc_setting['calc_dir']}{writeProjXY_filePrefix}_vacXY_lit_a3.xyz", mode='lit_vac_a3')    
 
+    ###############################################
+    # XY projection geometry analysis
+    occupied_coordXY, boundary_coordXY = extract_XY_occPoints_boundPoints(vacXY_list)
+    print(f"Number of vacXY occupied sites {len(occupied_coordXY)}. Its boundary: {len(boundary_coordXY)}. ")
+
+    centroid = np.mean(boundary_coordXY, axis=0)
+    distances = np.linalg.norm(boundary_coordXY - centroid, axis=1)
+    VacXY_roughness_perimeter = np.std(distances)
+
+    hull = ConvexHull(boundary_coordXY)
+    hull_perimeter = np.sum(np.linalg.norm(np.diff(hull.points[hull.vertices], axis=0), axis=1))
+    # actual_perimeter = np.sum(np.linalg.norm(np.diff(boundary_coordXY, axis=0), axis=1))
+    actual_perimeter = len(boundary_coordXY) * VacXY_neighbor_dist
+    VacXY_roughness_hull_perimeter = actual_perimeter / hull_perimeter 
+
+    hull_area = hull.volume
+    actual_area = len(occupied_coordXY) * VacXY_hex_pixel_area
+    VacXY_roughness_hull_area = actual_area / hull_area
+
+    VacXY_cir_ratio = 4*np.pi*actual_area / (actual_perimeter)**2
+
+    ###############################################
+    # XZ projection geometry analysis
+    occupied_coordXZ = []
+    for site in site_list: 
+        if site.has_atom: 
+            occupied_coordXZ.append(site.real_space_coord[[0, 2]])
+    occupied_coordXZ = np.array(occupied_coordXZ)
+
+    min_x = np.min(occupied_coordXZ[:, 0])
+    max_x = np.max(occupied_coordXZ[:, 0])
+    min_z = np.min(occupied_coordXZ[:, 1])
+    max_z = np.max(occupied_coordXZ[:, 1])
+    XZ_bb_AR = (max_x - min_x) / (max_z - min_z)
+
+    hull = ConvexHull(occupied_coordXZ)
+    hull_area = hull.volume
+    XZ_bb_area = (max_x - min_x) * (max_z - min_z)
+    XZ_area_ratio = hull_area / XZ_bb_area
+
+
+    ###############################################
+    # YZ projection geometry analysis
+    occupied_coordYZ = []
+    for site in site_list: 
+        if site.has_atom: 
+            occupied_coordYZ.append(site.real_space_coord[[1, 2]])
+    occupied_coordYZ = np.array(occupied_coordYZ)
+
+    min_y = np.min(occupied_coordYZ[:, 0])
+    max_y = np.max(occupied_coordYZ[:, 0])
+    min_z = np.min(occupied_coordYZ[:, 1])
+    max_z = np.max(occupied_coordYZ[:, 1])
+    YZ_bb_AR = (max_y - min_y) / (max_z - min_z)
+
+    hull = ConvexHull(occupied_coordYZ)
+    hull_area = hull.volume
+    YZ_bb_area = (max_y - min_y) * (max_z - min_z)
+    YZ_area_ratio = hull_area / YZ_bb_area
+
     stats_dict = {
         "num_cation": num_cation, 
         "num_anion": num_anion, 
@@ -341,6 +460,28 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
         "vac_a1_layer_counts": vac_a1_layer_counts, 
         "vac_a2_layer_counts": vac_a2_layer_counts, 
         "vac_a3_layer_counts": vac_a3_layer_counts, 
+        "VacXY_roughness_perimeter": VacXY_roughness_perimeter, 
+        "VacXY_roughness_hull_perimeter": VacXY_roughness_hull_perimeter, 
+        "VacXY_roughness_hull_area": VacXY_roughness_hull_area, 
+        "VacXY_cir_ratio": VacXY_cir_ratio,
+        "XZ_bb_AR": XZ_bb_AR, 
+        "XZ_area_ratio": XZ_area_ratio, 
+        "YZ_bb_AR": YZ_bb_AR, 
+        "YZ_area_ratio": YZ_area_ratio, 
     }
     # print(f"\t {stats_dict}")
     return stats_dict
+
+
+def extract_XY_occPoints_boundPoints(vacXY_list): 
+    occupied_coord = []
+    boundary_coord = []
+    for vacXY in vacXY_list: 
+        if vacXY.light_up: 
+            occupied_coord.append(vacXY.coordXY)
+
+            if any(not lit_up for lit_up in vacXY.neighborXY_vac_litUp_bool):
+                boundary_coord.append(vacXY.coordXY)
+
+    return np.array(occupied_coord), np.array(boundary_coord)
+

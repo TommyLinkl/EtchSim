@@ -492,7 +492,7 @@ def group_XY_layers(list, mode="siteXY"):  # Designed to be called only once, at
     if mode=='siteXY':
         dist = XY_neighbor_dist
     elif mode=='vacXY': 
-        dist = 1.5 * XY_neighbor_dist
+        dist = 1.5 * XY_neighbor_dist    # Note that this is intentionally not VacXY_neighbor_dist! 
     
     if mode=='siteXY':
         '''

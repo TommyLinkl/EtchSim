@@ -2,7 +2,7 @@ import sys, time, os
 import json
 import pickle
 from src.constants import *
-from src.sites import initialize_wz_lattice, initialize_hex_NPL, project_to_XY, init_XYvac
+from src.sites import initialize_wz_lattice, initialize_hex_NPL, project_to_XY, init_XYvac, update_whole_lattice_iteration
 from src.kmc import kmc_run, collect_stats
 
 def load_input_from_json(filename):
@@ -40,11 +40,16 @@ def main():
         with open(sites_pklFileNormPath, 'rb') as f:
             wz_lattice = pickle.load(f)
 
+        # Updating the entire wz_lattice is needed, since the sim_params might have changed, affecting the sites' rates. 
+        for site in wz_lattice: 
+            site.iteration_changed = True
+        update_whole_lattice_iteration(wz_lattice, sim_params)
+
     # map to siteXY_list and vacXY_list
     start_time = time.time()
     wz_lattice_XY = project_to_XY(wz_lattice)
     wz_lattice_vacXY = init_XYvac(wz_lattice_XY)
-    init_stats = collect_stats(wz_lattice, wz_lattice_XY, wz_lattice_vacXY, sim_params, writeProjXY_filePrefix="init")
+    # init_stats = collect_stats(wz_lattice, wz_lattice_XY, wz_lattice_vacXY, sim_params, writeProjXY_filePrefix="init")
     end_time = time.time()
     print(f"Project down to XY and construct vacancies, elapsed time: {(end_time - start_time):.5f}s. ")
 

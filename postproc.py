@@ -14,6 +14,7 @@ def postprocessing():
     calc_setting['calc_dir'] = sys.argv[1]
     load_input_from_json(f"{sys.argv[1]}input.json")
 
+    ########################## Read in and "re"construct data structures ########################## 
     # Read in site_list, siteXY_list, vacXY_list from pickle files and construct these lists
     start_time = time.time()
     with open(f"{calc_setting['calc_dir']}init_site_list.pkl", 'rb') as f:
@@ -34,6 +35,7 @@ def postprocessing():
     end_time = time.time()
     print(f"\nDone with reading struct_lists and data. Elapsed time: {(end_time - start_time):.5f}s = {(end_time - start_time)/60:.2f}min")
 
+    ########################## Post-process and collect stats ########################## 
     # For each frame, update the lattice and collect stats
     start_time = time.time()
     stats_list = []
@@ -43,6 +45,7 @@ def postprocessing():
     trajVacFileName_zip = f"{calc_setting['calc_dir']}trajVac.xyz.gz"
     with open(trajVacFileName_zip, 'w') as f:
         pass
+
     for row in tqdm(data_df.itertuples(index=False), total=len(data_df), desc="Processing Rows"):
     # for row in data_df.itertuples(index=False):
         step_num = int(row[0])
@@ -88,7 +91,8 @@ def postprocessing():
         stats['simTime'] = simTime
         stats_list.append(stats)
 
-    # Dump the stats in a json file
+    ########################## Dump the post-processed stats ##########################
+    # Dump the post-processed stats in a json file
     with open(f"{calc_setting['calc_dir']}stats.json", 'w') as file:
         json.dump(stats_list, file, separators=(',', ':'))
     end_time = time.time()
@@ -96,4 +100,5 @@ def postprocessing():
 
 
 ######################################################
-postprocessing()
+if __name__ == "__main__": 
+    postprocessing()

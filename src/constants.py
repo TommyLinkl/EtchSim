@@ -9,6 +9,8 @@ bond_length_max = 2.65  # AA, should be either 2.55 or 2.56 AA
 bond_length_max_XY = 2.60  # AA, should be 2.40755 AA. Must be smaller than 4.17000 AA. 
 XY_neighbor_dist = 2.40755  # AA
 veryFar = 300.0 
+VacXY_neighbor_dist = 4.17000   # AA
+VacXY_hex_pixel_area = 2*np.sqrt(3)*(VacXY_neighbor_dist/2)**2
 
 unitCellVectors = np.array([[a, 0, 0], 
                             [-0.5 * a, np.sqrt(3) / 2 * a, 0], 

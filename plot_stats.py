@@ -24,6 +24,7 @@ matplotlib.rcParams['xtick.direction'] = 'in'
 matplotlib.rcParams['ytick.direction'] = 'in'
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
+from src.constants import *
 
 def plot_singleValue(key, allData, num_bins, bins, bin_centers, ax, lineStyle, lineColor, fillColor, label=""): 
     # Initialize arrays to store sum of values, sum of squares, and count of values in each bin
@@ -143,7 +144,6 @@ def plot_theta(key, oneTrajData, num_bins, bins, bin_centers, deltaTBin, ax):
 
 def reverse_plot_theta(key, oneTrajData, num_bins, bins, bin_centers, deltaTBin, ax): 
     num_values = len(oneTrajData[0][key])
-    # cmap = plt.get_cmap('bwr')
     jet = plt.get_cmap('jet')
     jet_colors = jet(np.linspace(0, 1, 256))
     custom_colors = np.concatenate([
@@ -191,6 +191,7 @@ def reverse_plot_theta(key, oneTrajData, num_bins, bins, bin_centers, deltaTBin,
 
 
 def avg_one_dataset(dirPrefix, numRepeats, writeToDir, deltaTBin, color_line, color_shade): 
+    # This function is for creating plots for each parameter set, where all 16 trajectories are time-averaged using bins. 
     matplotlib.rcParams['font.size'] = 8
     min_simTime = np.inf
     allData = []
@@ -215,12 +216,8 @@ def avg_one_dataset(dirPrefix, numRepeats, writeToDir, deltaTBin, color_line, co
     fig, ax = plt.subplots(1,1, figsize=(3,3))
     cmap = plt.get_cmap('tab20')
     plot_singleValue('num_cation', allData, num_bins, bins, bin_centers, ax, '-', color_line, color_shade)
-    # plot_singleValue('num_anion', allData, num_bins, bins, bin_centers, axs[1], '-', cmap.colors[2], cmap.colors[3])
     fig.suptitle(f"Num cations (or anions), {dirPrefix.split('/')[-1]}")
-    ax.set(xlabel='Time', ylabel='Number of Atoms')
-    # ax.legend()
-    # axs[1].set(xlabel='Time', ylabel='Number of Atoms')
-    # axs[1].legend()
+    ax.set(xlabel='Time', ylabel='Number of Atoms', ylim=(0, 12000))
     fig.tight_layout()
     fig.savefig(f"{writeToDir}plot_nAtoms.pdf")
     plt.close()
@@ -239,8 +236,9 @@ def avg_one_dataset(dirPrefix, numRepeats, writeToDir, deltaTBin, color_line, co
     for traj in allData: 
         for frame in traj: 
             frame['VacXY_tot'] = np.sum(np.array(frame['vacNeighbors_counts']))
-    plot_singleValue('VacXY_tot', allData, num_bins, bins, bin_centers, ax, '-', color_line, color_shade)
-    ax.set(xlabel='Time', ylabel='Surface Area [unit]', title=f"Surface Area, {dirPrefix.split('/')[-1]}")
+            frame['surfaceArea'] = frame['VacXY_tot'] * VacXY_hex_pixel_area
+    plot_singleValue('surfaceArea', allData, num_bins, bins, bin_centers, ax, '-', color_line, color_shade)
+    ax.set(xlabel='Time', ylabel=r"Surface Area (${\AA}^2$)", title=f"Surface Area, {dirPrefix.split('/')[-1]}", ylim=(0, 5500))
     # ax.legend()
     fig.tight_layout()
     fig.savefig(f"{writeToDir}plot_surfaceArea.pdf")
@@ -249,7 +247,7 @@ def avg_one_dataset(dirPrefix, numRepeats, writeToDir, deltaTBin, color_line, co
     # plot thickness over time
     fig, ax = plt.subplots(1,1, figsize=(3,3))
     plot_singleValue('thickness', allData, num_bins, bins, bin_centers, ax, '-', color_line, color_shade)
-    ax.set(xlabel='Time', ylabel='Thickness (nm)', title=f"Thickness, {dirPrefix.split('/')[-1]}")
+    ax.set(xlabel='Time', ylabel='Thickness (nm)', title=f"Thickness, {dirPrefix.split('/')[-1]}", ylim=(0, 42))
     # ax.legend()
     fig.tight_layout()
     fig.savefig(f"{writeToDir}plot_thickness.pdf")
@@ -258,26 +256,16 @@ def avg_one_dataset(dirPrefix, numRepeats, writeToDir, deltaTBin, color_line, co
     # plot 3D number of neighbors
     fig, ax = plt.subplots(1,1, figsize=(3,3))
     plot_num_neighbors('neighbor_3D_counts', allData, num_bins, bins, bin_centers, ax)
-    ax.set(xlabel='Time', ylabel='Number Atoms', title=f"3D num_neigh, {dirPrefix.split('/')[-1]}")
-    # ax.legend()
+    ax.set(xlabel='Time', ylabel='Number of atoms', title=f"3D num_neigh, {dirPrefix.split('/')[-1]}", ylim=(0, 3500))
+    ax.legend()
     fig.tight_layout()
     fig.savefig(f"{writeToDir}plot_site_neigh_count.pdf")
     plt.close()
 
-    '''
-    # plot 2D number of neighbors
-    fig, ax = plt.subplots(1,1, figsize=(6,5))
-    plot_num_neighbors('neighbor_XY_counts', allData, num_bins, bins, bin_centers, ax)
-    ax.set(xlabel='Time', ylabel='Number Atoms', title=f"siteXY num_neigh, avg over {numRepeats} traj")
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(f"{writeToDir}plot_siteXY_neigh_count.pdf")
-    '''
-
     # plot 2D vacancy number of neighbors
-    fig, ax = plt.subplots(1,1, figsize=(4,4))
+    fig, ax = plt.subplots(1,1, figsize=(3,3))
     plot_num_neighbors('vacNeighbors_counts', allData, num_bins, bins, bin_centers, ax)
-    ax.set(xlabel='Time', ylabel='Number Atoms', title=f"VacXY num_neigh, {dirPrefix.split('/')[-1]}")
+    ax.set(xlabel='Time', ylabel='Number of atoms', title=f"VacXY num_neigh, {dirPrefix.split('/')[-1]}", ylim=(0, 110))
     ax.legend()
     fig.tight_layout()
     fig.savefig(f"{writeToDir}plot_VacXY_neigh_count.pdf")
@@ -321,7 +309,146 @@ def avg_one_dataset(dirPrefix, numRepeats, writeToDir, deltaTBin, color_line, co
     return
 
 
+def plot_individual_trajectories(all_chemPot_sets, numTraj, cmap, dirPrefix):
+    # This function create '_indivTraj.pdf' plots for each parameter set, where each trajectory is plotted individually. 
+    for idx, chemPot in enumerate(all_chemPot_sets): 
+        allData = []
+        for repeat in range(numTraj):
+            json_file_path = f"{dirPrefix}{chemPot}_repeat_{repeat+1}/stats.json"
+            with open(json_file_path, 'r') as file:
+                stats_list = json.load(file)
+            allData.append(stats_list)
+
+        #################################################################
+        # plot number of cations, number of anions
+        fig, ax = plt.subplots(1,1, figsize=(4,4))
+        cmap = plt.get_cmap('tab20')
+
+        for trajIdx in range(numTraj): 
+            times = np.array([item['simTime'] for item in allData[trajIdx]])
+            values = np.array([item['num_cation'] for item in allData[trajIdx]])
+            if trajIdx == 0: 
+                setAlpha = 1.0
+            else: 
+                setAlpha = 0.15
+            ax.plot(times, values, '-', alpha=setAlpha, color=cmap.colors[idx*2])
+            # print(f"Initial num of atoms: {values[0]}, {np.max(values)}")
+        ax.set(xlabel='Time', ylabel='Number of Atoms', ylim=(0, 12000))
+        ax.grid(alpha=0.6)
+        fig.suptitle(f"Num cations (or anions), {chemPot}, 16 traj")
+        fig.tight_layout()
+        fig.savefig(f"{dirPrefix}{chemPot}/plot_nAtoms_indivTraj.pdf")
+        plt.close()
+
+        #################################################################
+        # plot surface area
+        fig, ax = plt.subplots(1,1, figsize=(4,4))
+        for traj in allData: 
+            for frame in traj: 
+                frame['VacXY_tot'] = np.sum(np.array(frame['vacNeighbors_counts']))
+                frame['surfaceArea'] = frame['VacXY_tot'] * VacXY_hex_pixel_area
+        
+        for trajIdx in range(numTraj): 
+            times = np.array([item['simTime'] for item in allData[trajIdx]])
+            values = np.array([item['surfaceArea'] for item in allData[trajIdx]])
+            if trajIdx == 0: 
+                setAlpha = 1.0
+            else: 
+                setAlpha = 0.15
+            ax.plot(times, values, '-', alpha=setAlpha, color=cmap.colors[idx*2])
+            # print(f"Initial surface area: {values[0]}, {np.max(values)}")
+        ax.set(xlabel='Time', ylabel=r"Surface Area (${\AA}^2$)", title=f"Surface Area, {chemPot}, 16 traj", ylim=(0, 5500))
+        ax.grid(alpha=0.6)
+        fig.tight_layout()
+        fig.savefig(f"{dirPrefix}{chemPot}/plot_surfaceArea_indivTraj.pdf")
+        plt.close()
+
+        #################################################################
+        # plot energy
+        fig, ax = plt.subplots(1,1, figsize=(4,4))
+        for trajIdx in range(numTraj): 
+            times = np.array([item['simTime'] for item in allData[trajIdx]])
+            values = np.array([item['energy'] for item in allData[trajIdx]])
+            if trajIdx == 0: 
+                setAlpha = 1.0
+            else: 
+                setAlpha = 0.15
+            ax.plot(times, values, '-', alpha=setAlpha, color=cmap.colors[idx*2])
+        ax.set(xlabel='Time', ylabel='Energy', title=f"Energy, {chemPot}, 16 traj")
+        ax.grid(alpha=0.6)
+        fig.tight_layout()
+        fig.savefig(f"{dirPrefix}{chemPot}/plot_energy_indivTraj.pdf")
+        plt.close()
+
+        #################################################################
+        # plot thickness over time
+        fig, ax = plt.subplots(1,1, figsize=(4,4))
+        for trajIdx in range(numTraj): 
+            times = np.array([item['simTime'] for item in allData[trajIdx]])
+            values = np.array([item['thickness'] for item in allData[trajIdx]])
+            if trajIdx == 0: 
+                setAlpha = 1.0
+            else: 
+                setAlpha = 0.15
+            ax.plot(times, values, '-', alpha=setAlpha, color=cmap.colors[idx*2])
+        ax.set(xlabel='Time', ylabel='Thickness (nm)', title=f"Thickness, {chemPot}, 16 traj", ylim=(0, 42))
+        ax.grid(alpha=0.6)
+        fig.tight_layout()
+        fig.savefig(f"{dirPrefix}{chemPot}/plot_thickness_indivTraj.pdf")
+        plt.close()
+
+        #################################################################
+        # plot 3D number of neighbors
+        fig, ax = plt.subplots(1,1, figsize=(4,4))
+        num_neighbors = len(allData[0][0]['neighbor_3D_counts']) - 1
+        for trajIdx in range(numTraj): 
+            for i in range(num_neighbors): 
+                times = np.array([item['simTime'] for item in allData[trajIdx]])
+                values = np.array([item['neighbor_3D_counts'][i] for item in allData[trajIdx]])
+                if trajIdx == 0: 
+                    setAlpha = 1.0
+                    ax.plot(times, values, '-', alpha=setAlpha, color=cmap.colors[(2*i)%20], label=f"{i}_neighbors")
+                else: 
+                    setAlpha = 0.15
+                    ax.plot(times, values, '-', alpha=setAlpha, color=cmap.colors[(2*i)%20])
+        ax.set(xlabel='Time', ylabel='Number of atoms', title=f"3D num_neigh, {chemPot}, 16 traj", ylim=(0, 3500))
+        ax.grid(alpha=0.6)
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig(f"{dirPrefix}{chemPot}/plot_site_neigh_count_indivTraj.pdf")
+        plt.close()
+
+        #################################################################
+        # plot 2D vacancy number of neighbors
+        fig, ax = plt.subplots(1,1, figsize=(4,4))
+        num_neighbors = len(allData[0][0]['vacNeighbors_counts']) - 1
+        for trajIdx in range(numTraj): 
+            for i in range(num_neighbors): 
+                times = np.array([item['simTime'] for item in allData[trajIdx]])
+                values = np.array([item['vacNeighbors_counts'][i] for item in allData[trajIdx]])
+                if trajIdx == 0: 
+                    setAlpha = 1.0
+                    ax.plot(times, values, '-', alpha=setAlpha, color=cmap.colors[(2*i)%20], label=f"{i}_neighbors")
+                else: 
+                    setAlpha = 0.15
+                    ax.plot(times, values, '-', alpha=setAlpha, color=cmap.colors[(2*i)%20])
+        ax.set(xlabel='Time', ylabel='Number of atoms', title=f"VacXY num_neigh, {chemPot}, 16 traj", ylim=(0, 110))
+        ax.grid(alpha=0.6)
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig(f"{dirPrefix}{chemPot}/plot_VacXY_neigh_count_indivTraj.pdf")
+        plt.close()
+
+        shutil.copy(f'{dirPrefix}{chemPot}/plot_energy_indivTraj.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_energy_indivTraj.pdf")
+        shutil.copy(f'{dirPrefix}{chemPot}/plot_nAtoms_indivTraj.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_nAtoms_indivTraj.pdf")
+        shutil.copy(f'{dirPrefix}{chemPot}/plot_site_neigh_count_indivTraj.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_site_neigh_count_indivTraj.pdf")
+        shutil.copy(f'{dirPrefix}{chemPot}/plot_surfaceArea_indivTraj.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_surfaceArea_indivTraj.pdf")
+        shutil.copy(f'{dirPrefix}{chemPot}/plot_thickness_indivTraj.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_thickness_indivTraj.pdf")
+        shutil.copy(f'{dirPrefix}{chemPot}/plot_VacXY_neigh_count_indivTraj.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_VacXY_neigh_count_indivTraj.pdf")
+
+
 def plot_all_datasets(all_chemPot_sets, deltaT_list, numTraj, dirPrefix, writeToDir):
+    # This function is for creating 1 plot for all parameter sets. 
     fig1, ax1 = plt.subplots(1,1, figsize=(5,3))
     fig2, ax2 = plt.subplots(1,1, figsize=(5,3))
     fig3, ax3 = plt.subplots(1,1, figsize=(5,3))
@@ -349,7 +476,6 @@ def plot_all_datasets(all_chemPot_sets, deltaT_list, numTraj, dirPrefix, writeTo
 
         # plot number of cations, number of anions, fig1
         plot_singleValue('num_cation', allData, num_bins, bins, bin_centers, ax1, '-', cmap.colors[idx*2], cmap.colors[idx*2+1], label=f"{chemPot}")
-        # plot_singleValue('num_anion', allData, num_bins, bins, bin_centers, ax1, ':', cmap.colors[idx*4], cmap.colors[idx*4+1], label=f"{chemPot}")
         ax1.set(xlabel='Time', ylabel=f"Num cations (or anions), avg over {numTraj} traj", ylim=(0, 12000))
         ax1.set_xscale('log')
         ax1.legend()
@@ -358,8 +484,9 @@ def plot_all_datasets(all_chemPot_sets, deltaT_list, numTraj, dirPrefix, writeTo
         for traj in allData: 
             for frame in traj: 
                 frame['VacXY_tot'] = np.sum(np.array(frame['vacNeighbors_counts']))
-        plot_singleValue('VacXY_tot', allData, num_bins, bins, bin_centers, ax4, '-', cmap.colors[idx*2], cmap.colors[idx*2+1], label=f"{chemPot} ")
-        ax4.set(xlabel='Time', ylabel='Surface Area [unit]', title=f"Surface Area, avg over {numTraj} traj", ylim=(0, 1100))
+                frame['surfaceArea'] = frame['VacXY_tot'] * VacXY_hex_pixel_area
+        plot_singleValue('surfaceArea', allData, num_bins, bins, bin_centers, ax4, '-', cmap.colors[idx*2], cmap.colors[idx*2+1], label=f"{chemPot} ")
+        ax4.set(xlabel='Time', ylabel=r"Surface Area (${\AA}^2$)", title=f"Surface Area, avg over {numTraj} traj", ylim=(0, 5500))
         ax4.set_xscale('log')
         ax4.legend()
 
@@ -371,7 +498,7 @@ def plot_all_datasets(all_chemPot_sets, deltaT_list, numTraj, dirPrefix, writeTo
         
         # plot thickness over time, fig3
         plot_singleValue('thickness', allData, num_bins, bins, bin_centers, ax3, '-', cmap.colors[idx*2], cmap.colors[idx*2+1], label=f"{chemPot} ")
-        ax3.set(xlabel='Time', ylabel='Thickness (nm)', title=f"Thickness, avg over {numTraj} traj", ylim=(0,40))
+        ax3.set(xlabel='Time', ylabel='Thickness (nm)', title=f"Thickness, avg over {numTraj} traj", ylim=(0, 42))
         ax3.set_xscale('log')
         ax3.legend()
 
@@ -387,21 +514,31 @@ def plot_all_datasets(all_chemPot_sets, deltaT_list, numTraj, dirPrefix, writeTo
 
 
 ######################################################
-all_chemPot_sets = ['-4.0_-4.0', '-3.5_-3.5', '-3.0_-3.0', '-2.5_-2.5', '-2.0_-2.0'] 
-deltaT_list = [0.00003, 0.0003, 0.003, 0.05, 2.8]
-numTraj = 16
-cmap = plt.get_cmap('tab20')
+if __name__ == "__main__":
+    ######################################################
+    # Plot avg over multiple trajectories
+    ######################################################
+    all_chemPot_sets = ['-4.0_-4.0', '-3.5_-3.5', '-3.0_-3.0', '-2.5_-2.5', '-2.0_-2.0'] 
+    deltaT_list = [0.00003, 0.0003, 0.003, 0.05, 2.8]
+    numTraj = 16
+    cmap = plt.get_cmap('tab20')
 
-for idx, chemPot in enumerate(all_chemPot_sets): 
-    avg_one_dataset(f'CALCS_diam15.4_thick3.5/{chemPot}', numTraj, f'CALCS_diam15.4_thick3.5/{chemPot}/', deltaT_list[idx], cmap.colors[idx*2], cmap.colors[idx*2+1])
+    for idx, chemPot in enumerate(all_chemPot_sets): 
+        avg_one_dataset(f'CALCS_diam15.4_thick3.5/{chemPot}', numTraj, f'CALCS_diam15.4_thick3.5/{chemPot}/', deltaT_list[idx], cmap.colors[idx*2], cmap.colors[idx*2+1])
 
-    shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_energy.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_energy.pdf")
-    shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_nAtoms.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_nAtoms.pdf")
-    shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_site_neigh_count.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_site_neigh_count.pdf")
-    shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_surfaceArea.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_surfaceArea.pdf")
-    shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_thickness.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_thickness.pdf")
-    shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_VacXY_neigh_count.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_VacXY_neigh_count.pdf")
-    shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_VacXY_theta.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_VacXY_theta.pdf")
-    shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_VacXY_theta_reverse.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_VacXY_theta_reverse.pdf")
+        shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_energy.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_energy.pdf")
+        shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_nAtoms.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_nAtoms.pdf")
+        shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_site_neigh_count.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_site_neigh_count.pdf")
+        shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_surfaceArea.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_surfaceArea.pdf")
+        shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_thickness.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_thickness.pdf")
+        shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_VacXY_neigh_count.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_VacXY_neigh_count.pdf")
+        shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_VacXY_theta.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_VacXY_theta.pdf")
+        shutil.copy(f'CALCS_diam15.4_thick3.5/{chemPot}/plot_VacXY_theta_reverse.pdf', f"PLOTS/{chemPot.replace('-', 'n').replace('.', 'p')}_plot_VacXY_theta_reverse.pdf")
 
-plot_all_datasets(all_chemPot_sets, deltaT_list, numTraj, 'CALCS_diam15.4_thick3.5/', 'PLOTS/')
+    plot_all_datasets(all_chemPot_sets, deltaT_list, numTraj, 'CALCS_diam15.4_thick3.5/', 'PLOTS/')
+
+
+    ######################################################
+    # Plot individual trajectories
+    ######################################################
+    plot_individual_trajectories(all_chemPot_sets, numTraj, cmap, 'CALCS_diam15.4_thick3.5/')

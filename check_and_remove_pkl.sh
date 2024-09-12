@@ -1,7 +1,7 @@
 #!/bin/bash
 
-mode="remove"
-calc="-3.5_-3.5"
+mode="check"
+calc="-2.0_-2.0"
 
 if [[ "$mode" == "check" ]]; then
     for i in {1..16}; do

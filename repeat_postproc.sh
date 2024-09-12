@@ -1,10 +1,21 @@
 #!/bin/bash
 
+# calcNames=(
+#     "-2.0_-2.0_repeat_1"
+#     "-2.0_-2.0_repeat_2"
+#     "-2.0_-2.0_repeat_3"
+# )
+
+calcNames=()
 for i in $(seq 1 16); do
-    new_calcName="-2.0_-2.0_repeat_${i}"
+    calcNames+=("-2.0_-2.0_repeat_${i}")
+done
+
+for new_calcName in "${calcNames[@]}"; do
     echo $new_calcName
     
-    sed "s/PleaseREPLACE/${new_calcName}/g" submit_postproc.sh > submit_postproc_repeat_${i}.sh
-    sbatch submit_postproc_repeat_${i}.sh
-    rm submit_postproc_repeat_${i}.sh
+    # Replace placeholder and create job script, then submit it
+    sed "s/PleaseREPLACE/${new_calcName}/g" submit_postproc.sh > submit_postproc_temp.sh
+    sbatch submit_postproc_temp.sh
+    rm submit_postproc_temp.sh
 done
