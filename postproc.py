@@ -1,5 +1,5 @@
-import sys, time, os
-import pickle, csv, gzip, json
+import sys, time
+import pickle, gzip, json
 import pandas as pd
 from tqdm import tqdm
 from src.constants import *
