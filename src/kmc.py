@@ -2,7 +2,7 @@ import time
 import numpy as np
 import json, csv, gzip
 from multiprocessing import Pool, cpu_count
-from scipy.spatial import ConvexHull
+from scipy.spatial import ConvexHull, QhullError
 from .constants import *
 from .sites import update_whole_lattice_iteration, check_neighbors, aggregate_to_xyz, update_XY_projection, write_projXY, update_XYvac, write_XY_sites_vac
 
@@ -391,21 +391,34 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
     occupied_coordXY, boundary_coordXY = extract_XY_occPoints_boundPoints(vacXY_list)
     print(f"Number of vacXY occupied sites {len(occupied_coordXY)}. Its boundary: {len(boundary_coordXY)}. ")
 
-    centroid = np.mean(boundary_coordXY, axis=0)
-    distances = np.linalg.norm(boundary_coordXY - centroid, axis=1)
-    VacXY_roughness_perimeter = np.std(distances)
+    if boundary_coordXY.size == 0:
+        VacXY_roughness_perimeter = -1.0
+    elif boundary_coordXY.ndim > 1:
+        centroid = np.mean(boundary_coordXY, axis=0)
+        distances = np.linalg.norm(boundary_coordXY - centroid, axis=1)
+        VacXY_roughness_perimeter = np.std(distances)
+    else:
+        VacXY_roughness_perimeter = -1.0
 
-    hull = ConvexHull(boundary_coordXY)
-    hull_perimeter = np.sum(np.linalg.norm(np.diff(hull.points[hull.vertices], axis=0), axis=1))
-    # actual_perimeter = np.sum(np.linalg.norm(np.diff(boundary_coordXY, axis=0), axis=1))
-    actual_perimeter = len(boundary_coordXY) * VacXY_neighbor_dist
-    VacXY_roughness_hull_perimeter = actual_perimeter / hull_perimeter 
+    try:
+        hull = ConvexHull(boundary_coordXY)
 
-    hull_area = hull.volume
-    actual_area = len(occupied_coordXY) * VacXY_hex_pixel_area
-    VacXY_roughness_hull_area = actual_area / hull_area
+        hull_perimeter = np.sum(np.linalg.norm(np.diff(hull.points[hull.vertices], axis=0), axis=1))
+        hull_area = hull.volume
 
-    VacXY_cir_ratio = 4*np.pi*actual_area / (actual_perimeter)**2
+        # actual_perimeter = np.sum(np.linalg.norm(np.diff(boundary_coordXY, axis=0), axis=1))
+        actual_perimeter = len(boundary_coordXY) * VacXY_neighbor_dist
+        actual_area = len(occupied_coordXY) * VacXY_hex_pixel_area
+
+        VacXY_roughness_hull_perimeter = actual_perimeter / hull_perimeter 
+        VacXY_roughness_hull_area = actual_area / hull_area
+        VacXY_cir_ratio = 4*np.pi*actual_area / (actual_perimeter)**2
+
+    except QhullError as e:
+        print(f"ConvexHull failed: {e}")
+        VacXY_roughness_hull_perimeter = 0.0
+        VacXY_roughness_hull_area = 0.0
+        VacXY_cir_ratio = 0.0
 
     ###############################################
     # XZ projection geometry analysis
@@ -421,10 +434,14 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
     max_z = np.max(occupied_coordXZ[:, 1])
     XZ_bb_AR = (max_x - min_x) / (max_z - min_z)
 
-    hull = ConvexHull(occupied_coordXZ)
-    hull_area = hull.volume
-    XZ_bb_area = (max_x - min_x) * (max_z - min_z)
-    XZ_area_ratio = hull_area / XZ_bb_area
+    try: 
+        hull = ConvexHull(occupied_coordXZ)
+        hull_area = hull.volume
+        XZ_bb_area = (max_x - min_x) * (max_z - min_z)
+        XZ_area_ratio = hull_area / XZ_bb_area
+    except QhullError as e:
+        print(f"ConvexHull failed: {e}")
+        XZ_area_ratio = 0.0
 
 
     ###############################################
@@ -441,10 +458,15 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
     max_z = np.max(occupied_coordYZ[:, 1])
     YZ_bb_AR = (max_y - min_y) / (max_z - min_z)
 
-    hull = ConvexHull(occupied_coordYZ)
-    hull_area = hull.volume
-    YZ_bb_area = (max_y - min_y) * (max_z - min_z)
-    YZ_area_ratio = hull_area / YZ_bb_area
+    try: 
+        hull = ConvexHull(occupied_coordYZ)
+        hull_area = hull.volume
+        YZ_bb_area = (max_y - min_y) * (max_z - min_z)
+        YZ_area_ratio = hull_area / YZ_bb_area
+    except QhullError as e:
+        print(f"ConvexHull failed: {e}")
+        YZ_area_ratio = 0.0
+
 
     stats_dict = {
         "num_cation": num_cation, 
