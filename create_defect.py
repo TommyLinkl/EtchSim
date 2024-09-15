@@ -6,7 +6,7 @@ from src.sites import update_whole_lattice_iteration, aggregate_to_xyz
 
 def create_defect(layer=1):
     # Reading in sites from the .pkl file
-    with open('CALCS_defect/sites.pkl', 'rb') as f:
+    with open('CALCS_defect_construction/sites.pkl', 'rb') as f:
         wz_lattice = pickle.load(f)
 
     if layer == 1: 
@@ -28,8 +28,8 @@ def create_defect(layer=1):
             site.iteration_changed = True
 
     update_whole_lattice_iteration(defect, sim_params)
-    aggregate_to_xyz(defect, write_site=False, write_atoms=True, write_filename=f"CALCS_defect/defect1_{layer}layer.xyz")
-    with open(f"CALCS_defect/defect1_{layer}layer.pkl", 'wb') as f:
+    aggregate_to_xyz(defect, write_site=False, write_atoms=True, write_filename=f"CALCS_defect_construction/defect1_{layer}layer.xyz")
+    with open(f"CALCS_defect_construction/defect1_{layer}layer.pkl", 'wb') as f:
         pickle.dump(defect, f)
 
     del defect
@@ -45,8 +45,8 @@ def create_defect(layer=1):
             site.iteration_changed = True
 
     update_whole_lattice_iteration(defect, sim_params)
-    aggregate_to_xyz(defect, write_site=False, write_atoms=True, write_filename=f"CALCS_defect/defect2_{layer}layer.xyz")
-    with open(f"CALCS_defect/defect2_{layer}layer.pkl", 'wb') as f:
+    aggregate_to_xyz(defect, write_site=False, write_atoms=True, write_filename=f"CALCS_defect_construction/defect2_{layer}layer.xyz")
+    with open(f"CALCS_defect_construction/defect2_{layer}layer.pkl", 'wb') as f:
         pickle.dump(defect, f)
 
     del defect
@@ -63,8 +63,8 @@ def create_defect(layer=1):
             site.iteration_changed = True
 
     update_whole_lattice_iteration(defect, sim_params)
-    aggregate_to_xyz(defect, write_site=False, write_atoms=True, write_filename=f"CALCS_defect/defect3_{layer}layer.xyz")
-    with open(f"CALCS_defect/defect3_{layer}layer.pkl", 'wb') as f:
+    aggregate_to_xyz(defect, write_site=False, write_atoms=True, write_filename=f"CALCS_defect_construction/defect3_{layer}layer.xyz")
+    with open(f"CALCS_defect_construction/defect3_{layer}layer.pkl", 'wb') as f:
         pickle.dump(defect, f)
 
     del defect

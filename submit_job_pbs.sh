@@ -1,23 +1,38 @@
 #!/bin/bash
-#PBS -N etch
+#PBS -N etch_PleaseREPLACE
 #PBS -l nodes=1:ppn=1:turtle
 #PBS -q batch
+#PBS -j oe
+#PBS -o etch_PleaseREPLACE.log
 ##PBS -m abe
 ##PBS -M tommy_lin@berkeley.edu
 
-# source /opt/intel/oneapi/setvars.sh
-# source ~/.bashrc
+start_time=$(date +%s)
 
-calcGroupDir="CALCS_diam15.4_thick3.5/"
+source ~/.bashrc
+export PATH="/home/tommylin/miniconda3/bin:$PATH"
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate myenv
+
+echo $HOSTNAME
+
+calcGroupDir="CALCS_defect1_2layer/"
 calcName="PleaseREPLACE/"     # "-4.0_-4.0/"   # "test/"
-homeDir="$calcGroupDir$calcName"
+echo $calcGroupDir$calcName
+
+homeDir="$PBS_O_WORKDIR/$calcGroupDir$calcName"
+cd $PBS_O_WORKDIR
 
 scratchDir="/scratch/tommylin/EtchSim/$calcGroupDir$calcName"
 mkdir -p "$scratchDir"
-cp -r "$homeDir"* "$scratchDir"
-cp "$calcGroupDir"init* "$SCRATCH/EtchSim/$calcGroupDir"
-cp "$calcGroupDir"sites.pkl "$SCRATCH/EtchSim/$calcGroupDir"
+cp -r "$homeDir"input.json "$scratchDir"
+# cp "$PBS_O_WORKDIR/$calcGroupDir"init* "/scratch/tommylin/EtchSim/$calcGroupDir"
+cp "$PBS_O_WORKDIR/$calcGroupDir"*.pkl "/scratch/tommylin/EtchSim/$calcGroupDir"
 
-nohup python main.py "$scratchDir" > "$scratchDir/run.dat" &
+nohup python main.py "$scratchDir" > "$scratchDir"run.dat 2>&1 &
 wait
-cp -r "$scratchDir"/* "$homeDir"
+cp -r "$scratchDir"* "$homeDir"
+
+end_time=$(date +%s)
+runtime=$((end_time - start_time))
+echo "Total runtime: $runtime seconds"
