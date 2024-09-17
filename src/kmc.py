@@ -400,25 +400,31 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
     else:
         VacXY_roughness_perimeter = -1.0
 
-    try:
-        hull = ConvexHull(boundary_coordXY)
-
-        hull_perimeter = np.sum(np.linalg.norm(np.diff(hull.points[hull.vertices], axis=0), axis=1))
-        hull_area = hull.volume
-
-        # actual_perimeter = np.sum(np.linalg.norm(np.diff(boundary_coordXY, axis=0), axis=1))
-        actual_perimeter = len(boundary_coordXY) * VacXY_neighbor_dist
-        actual_area = len(occupied_coordXY) * VacXY_hex_pixel_area
-
-        VacXY_roughness_hull_perimeter = actual_perimeter / hull_perimeter 
-        VacXY_roughness_hull_area = actual_area / hull_area
-        VacXY_cir_ratio = 4*np.pi*actual_area / (actual_perimeter)**2
-
-    except QhullError as e:
-        print(f"ConvexHull failed: {e}")
+    if len(boundary_coordXY) <= 3:
+        print(f"Insufficient points to compute ConvexHull: {len(boundary_coordXY)} points")
         VacXY_roughness_hull_perimeter = 0.0
         VacXY_roughness_hull_area = 0.0
         VacXY_cir_ratio = 0.0
+    else: 
+        try:
+            hull = ConvexHull(boundary_coordXY)
+
+            hull_perimeter = np.sum(np.linalg.norm(np.diff(hull.points[hull.vertices], axis=0), axis=1))
+            hull_area = hull.volume
+
+            # actual_perimeter = np.sum(np.linalg.norm(np.diff(boundary_coordXY, axis=0), axis=1))
+            actual_perimeter = len(boundary_coordXY) * VacXY_neighbor_dist
+            actual_area = len(occupied_coordXY) * VacXY_hex_pixel_area
+
+            VacXY_roughness_hull_perimeter = actual_perimeter / hull_perimeter 
+            VacXY_roughness_hull_area = actual_area / hull_area
+            VacXY_cir_ratio = 4*np.pi*actual_area / (actual_perimeter)**2
+
+        except QhullError as e:
+            print(f"ConvexHull failed. (Expected behavior for end of simulation) We are setting VacXY_xxx to placeholder values. ")
+            VacXY_roughness_hull_perimeter = 0.0
+            VacXY_roughness_hull_area = 0.0
+            VacXY_cir_ratio = 0.0
 
     ###############################################
     # XZ projection geometry analysis
@@ -428,20 +434,27 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
             occupied_coordXZ.append(site.real_space_coord[[0, 2]])
     occupied_coordXZ = np.array(occupied_coordXZ)
 
-    min_x = np.min(occupied_coordXZ[:, 0])
-    max_x = np.max(occupied_coordXZ[:, 0])
-    min_z = np.min(occupied_coordXZ[:, 1])
-    max_z = np.max(occupied_coordXZ[:, 1])
-    XZ_bb_AR = (max_x - min_x) / (max_z - min_z)
+    if len(occupied_coordXZ) <= 2:
+        XZ_bb_AR = 0.0
+    else:
+        min_x = np.min(occupied_coordXZ[:, 0])
+        max_x = np.max(occupied_coordXZ[:, 0])
+        min_z = np.min(occupied_coordXZ[:, 1])
+        max_z = np.max(occupied_coordXZ[:, 1])
+        XZ_bb_AR = (max_x - min_x) / (max_z - min_z)
 
-    try: 
-        hull = ConvexHull(occupied_coordXZ)
-        hull_area = hull.volume
-        XZ_bb_area = (max_x - min_x) * (max_z - min_z)
-        XZ_area_ratio = hull_area / XZ_bb_area
-    except QhullError as e:
-        print(f"ConvexHull failed: {e}")
+    if len(occupied_coordXZ) <= 3:
+        print(f"Insufficient points to compute ConvexHull: {len(occupied_coordXZ)} points")
         XZ_area_ratio = 0.0
+    else: 
+        try: 
+            hull = ConvexHull(occupied_coordXZ)
+            hull_area = hull.volume
+            XZ_bb_area = (max_x - min_x) * (max_z - min_z)
+            XZ_area_ratio = hull_area / XZ_bb_area
+        except QhullError as e:
+            print(f"ConvexHull failed. (Expected behavior for end of simulation) We are setting XZ_area_ratio to a placeholder value.")
+            XZ_area_ratio = 0.0
 
 
     ###############################################
@@ -452,20 +465,27 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
             occupied_coordYZ.append(site.real_space_coord[[1, 2]])
     occupied_coordYZ = np.array(occupied_coordYZ)
 
-    min_y = np.min(occupied_coordYZ[:, 0])
-    max_y = np.max(occupied_coordYZ[:, 0])
-    min_z = np.min(occupied_coordYZ[:, 1])
-    max_z = np.max(occupied_coordYZ[:, 1])
-    YZ_bb_AR = (max_y - min_y) / (max_z - min_z)
+    if len(occupied_coordYZ) <= 2:
+        YZ_bb_AR = 0.0
+    else:
+        min_y = np.min(occupied_coordYZ[:, 0])
+        max_y = np.max(occupied_coordYZ[:, 0])
+        min_z = np.min(occupied_coordYZ[:, 1])
+        max_z = np.max(occupied_coordYZ[:, 1])
+        YZ_bb_AR = (max_y - min_y) / (max_z - min_z)
 
-    try: 
-        hull = ConvexHull(occupied_coordYZ)
-        hull_area = hull.volume
-        YZ_bb_area = (max_y - min_y) * (max_z - min_z)
-        YZ_area_ratio = hull_area / YZ_bb_area
-    except QhullError as e:
-        print(f"ConvexHull failed: {e}")
+    if len(occupied_coordYZ) <= 3:
+        print(f"Insufficient points to compute ConvexHull: {len(occupied_coordYZ)} points")
         YZ_area_ratio = 0.0
+    else: 
+        try: 
+            hull = ConvexHull(occupied_coordYZ)
+            hull_area = hull.volume
+            YZ_bb_area = (max_y - min_y) * (max_z - min_z)
+            YZ_area_ratio = hull_area / YZ_bb_area
+        except QhullError as e:
+            print(f"ConvexHull failed. (Expected behavior for end of simulation) We are setting YZ_area_ratio to a placeholder value.")
+            YZ_area_ratio = 0.0
 
 
     stats_dict = {

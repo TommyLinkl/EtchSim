@@ -6,5 +6,4 @@ src/__pycache__/
 etch_log.*
 etch_postproc_log.*
 etch_mem_log.*
-check_and_remove_pkl.sh
 PLOTS/

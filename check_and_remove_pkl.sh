@@ -1,8 +1,8 @@
 #!/bin/bash
 
-mode="check"
-calc="-3.5_-3.5"
-calcPrefix="CALCS_defect1_2layer/"
+mode="remove"
+calc="-4.0_-4.0"
+calcPrefix="CALCS_diam15.4_thick3.5/"
 
 if [[ "$mode" == "check" ]]; then
     for i in {1..16}; do
