@@ -3,11 +3,6 @@ import shutil
 import json
 import random
 
-# Constants
-source_dir = './CALCS_defect3_2layer/-4.0_-4.0'
-destination_template = './CALCS_defect3_2layer/-4.0_-4.0_repeat_{}'
-json_filename = 'input.json'
-
 def update_json_file(file_path, random_seed):
     with open(file_path, 'r') as f:
         data = json.load(f)
@@ -17,7 +12,7 @@ def update_json_file(file_path, random_seed):
     with open(file_path, 'w') as f:
         json.dump(data, f, indent=4)
 
-def repeat_calcs(nRepeat):
+def repeat_calcs(nRepeat, source_dir, destination_template, json_filename='input.json'):
     for i in range(1, nRepeat+1):
         destination_dir = destination_template.format(i)
         
@@ -29,4 +24,10 @@ def repeat_calcs(nRepeat):
 
 ########################
 if __name__ == "__main__":
-    repeat_calcs(16)
+    for mu in [-1.7, -1.8, -1.9, -2.0, -2.1, -2.2, -2.3, -2.4, -2.5, -2.6, -2.7, -2.8, -2.9, -3.0, -3.1, -3.5, -4.0]: 
+        source_dir = f"./CALCS_lowTemp/{mu:.1f}_{mu:.1f}"
+        destination_template = source_dir + "_repeat_{}"
+
+        repeat_calcs(1, source_dir, destination_template)
+
+

@@ -1,9 +1,9 @@
 #!/bin/bash
-#PBS -N etch_postproc_uneven_PleaseREPLACE
-#PBS -l nodes=1:ppn=2:turtle
+#PBS -N fingerprint
+#PBS -l nodes=1:ppn=4:turtle
 #PBS -q batch
 #PBS -j oe
-#PBS -o etch_postproc_uneven_PleaseREPLACE.log
+#PBS -o fingerprint.log
 ##PBS -m abe
 ##PBS -M tommy_lin@berkeley.edu
 
@@ -16,14 +16,8 @@ conda activate myenv
 
 echo $HOSTNAME
 
-calcGroupDir="CALCS_uneven/"
-calcName="PleaseREPLACE/"     # "-4.0_-4.0/"   # "test/"
-echo $calcGroupDir$calcName
-
-homeDir="$PBS_O_WORKDIR/$calcGroupDir$calcName"
 cd $PBS_O_WORKDIR
-
-nohup python postproc.py "$homeDir" > "$homeDir"run_postproc.dat 2>&1 &
+nohup python extract_fingerprint.py 2>&1 &
 wait
 
 end_time=$(date +%s)

@@ -1,9 +1,9 @@
 #!/bin/bash
-#PBS -N etch_PleaseREPLACE
-#PBS -l nodes=1:ppn=1:turtle
+#PBS -N etch_lowTemp_PleaseREPLACE
+#PBS -l nodes=1:ppn=2:turtle
 #PBS -q batch
 #PBS -j oe
-#PBS -o etch_PleaseREPLACE.log
+#PBS -o etch_lowTemp_PleaseREPLACE.log
 ##PBS -m abe
 ##PBS -M tommy_lin@berkeley.edu
 
@@ -16,7 +16,7 @@ conda activate myenv
 
 echo $HOSTNAME
 
-calcGroupDir="CALCS_defect1_2layer/"
+calcGroupDir="CALCS_lowTemp/"
 calcName="PleaseREPLACE/"     # "-4.0_-4.0/"   # "test/"
 echo $calcGroupDir$calcName
 

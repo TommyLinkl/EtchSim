@@ -6,4 +6,5 @@ src/__pycache__/
 etch_log.*
 etch_postproc_log.*
 etch_mem_log.*
-PLOTS/
+PLOTS*/
+expt/
