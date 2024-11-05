@@ -36,7 +36,9 @@ npl_params = {
     'read_sites_from': None, 
     'buffer': 30,
     'NPL_hex_diameter': 160,
-    'NPL_thickness': 40
+    'NPL_thickness': 40, 
+    'sphere_radius': 80, 
+    'cube_edge': 150
 }
 
 sim_params = {
