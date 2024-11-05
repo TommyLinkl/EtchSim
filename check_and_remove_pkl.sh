@@ -1,8 +1,8 @@
 #!/bin/bash
 
 mode="remove"
-calc="-4.0_-4.0"
-calcPrefix="CALCS_diam15.4_thick3.5/"
+calc="-3.5_-3.0"
+calcPrefix="CALCS_uneven/"
 
 if [[ "$mode" == "check" ]]; then
     for i in {1..16}; do

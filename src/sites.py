@@ -360,6 +360,46 @@ def NPL_geom_boundary(site_coord, hex_diameter, thickness, NPL_center=np.array([
     return part_of_NPL
 
 
+def NPL_geom_boundary_rotated_hex(site_coord, hex_diameter, thickness, NPL_center=np.array([0.0, 0.0, 0.0])):
+    part_of_NPL = False
+    
+    # Translate site coordinates to NPL-centered coordinates
+    site_coord = site_coord - NPL_center
+    x, y, z = site_coord
+
+    # Please the following link for details: https://www.desmos.com/calculator/xsbguvh46m
+    part_of_hex = (np.abs(x) <= np.sqrt(3)/2 * hex_diameter/2) and (np.abs(x) / np.sqrt(3) + np.abs(y) <= hex_diameter/2)
+
+    part_of_thickness = np.abs(z) <= thickness / 2
+    
+    if part_of_hex and part_of_thickness:
+        part_of_NPL = True
+
+    return part_of_NPL
+
+
+def NPL_within_sphere(site_coord, sphere_radius, center=np.array([0.0, 0.0, 0.0])):
+    part_of_sphere = False
+
+    site_coord = site_coord - center
+    x, y, z = site_coord
+
+    part_of_sphere = np.sqrt(x*x + y*y + z*z) <= sphere_radius
+
+    return part_of_sphere
+
+
+def NPL_within_cube(site_coord, cube_edge, center=np.array([0.0, 0.0, 0.0])):
+    part_of_cube = False
+
+    site_coord = site_coord - center
+    x, y, z = site_coord
+
+    part_of_cube = (np.abs(x) <= cube_edge/2.0) and (np.abs(y) <= cube_edge/2.0) and (np.abs(z) <= cube_edge/2.0)
+
+    return part_of_cube
+
+
 class SiteXY:
     def __init__(self, siteXY_id, site3D_ids, coordXY: np.ndarray, has_atom, neighborXY_sites_idx):
         self.siteXY_id = siteXY_id

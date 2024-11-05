@@ -338,6 +338,11 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
     vac_a2_layer_counts = [0] * (max([vacXY.a2_label for vacXY in vacXY_list if vacXY.a2_label is not None])+1)
     vac_a3_layer_counts = [0] * (max([vacXY.a3_label for vacXY in vacXY_list if vacXY.a3_label is not None])+1)
 
+    ###############################################
+    update_whole_lattice_iteration(site_list, sim_params)
+    update_XY_projection(site_list, siteXY_list)
+    update_XYvac(siteXY_list, vacXY_list)
+
     for site in site_list: 
         if site.has_atom and site.cation_bool: 
             num_cation += 1
@@ -373,6 +378,8 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
             vac_a3_layer_counts[vacXY.a3_label] += 1
 
     energy = - sim_params['mu_In'] * num_cation - sim_params['mu_P'] * num_anion - sim_params['epsilon']*numNeighborDouble/2
+    binding_energy = - sim_params['epsilon']*numNeighborDouble/2
+    surface_energy = 2.0 * num_cation + 2.0 * num_anion - sim_params['epsilon']*numNeighborDouble/2
 
     if (calc_setting['verbosity']>0) and ((writeProjXY_filePrefix=="init") or (writeProjXY_filePrefix=="final")):
         write_projXY(siteXY_list, writeFilename=f"{calc_setting['calc_dir']}{writeProjXY_filePrefix}_projXY_atoms.xyz", mode='all_atoms')
@@ -391,16 +398,20 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
     occupied_coordXY, boundary_coordXY = extract_XY_occPoints_boundPoints(vacXY_list)
     print(f"Number of vacXY occupied sites {len(occupied_coordXY)}. Its boundary: {len(boundary_coordXY)}. ")
 
-    if boundary_coordXY.size == 0:
+    if boundary_coordXY.size <=4:
         VacXY_roughness_perimeter = -1.0
+        VacXY_rel_std = -1.0
     elif boundary_coordXY.ndim > 1:
         centroid = np.mean(boundary_coordXY, axis=0)
         distances = np.linalg.norm(boundary_coordXY - centroid, axis=1)
         VacXY_roughness_perimeter = np.std(distances)
+        VacXY_rel_std = np.std(distances) / np.mean(distances)
     else:
         VacXY_roughness_perimeter = -1.0
+        VacXY_rel_std = -1.0
+    # print(f"{VacXY_roughness_perimeter:.5f}")
 
-    if len(boundary_coordXY) <= 3:
+    if len(boundary_coordXY) <= 5:
         print(f"Insufficient points to compute ConvexHull: {len(boundary_coordXY)} points")
         VacXY_roughness_hull_perimeter = 0.0
         VacXY_roughness_hull_area = 0.0
@@ -408,17 +419,28 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
     else: 
         try:
             hull = ConvexHull(boundary_coordXY)
+            # print(hull.points[hull.vertices])
 
-            hull_perimeter = np.sum(np.linalg.norm(np.diff(hull.points[hull.vertices], axis=0), axis=1))
+            # hull_perimeter = np.sum(np.linalg.norm(np.diff(hull.points[hull.vertices], axis=0), axis=1)) + np.linalg.norm(hull.points[hull.vertices][-1] - hull.points[hull.vertices][0])   # This is an equivalent way to calculate the hull perimeter
+            hull_perimeter = hull.area
             hull_area = hull.volume
+            # print(f"hull_perimeter = {hull_perimeter:.5f}")
+            # print(f"hull_area = {hull_area:.5f}")
 
-            # actual_perimeter = np.sum(np.linalg.norm(np.diff(boundary_coordXY, axis=0), axis=1))
-            actual_perimeter = len(boundary_coordXY) * VacXY_neighbor_dist
-            actual_area = len(occupied_coordXY) * VacXY_hex_pixel_area
+            # actual_perimeter = len(boundary_coordXY) * VacXY_neighbor_dist   # This is an equivalent way to calculate the actual perimeter
+            actual_perimeter = VacXY_neighbor_dist * (vacNeighbors_counts[1] + vacNeighbors_counts[2] + vacNeighbors_counts[3] + vacNeighbors_counts[4] + vacNeighbors_counts[5])
+            # print(f"actual_perimeter = {actual_perimeter:.5f}")
+
+            # actual_area = len(occupied_coordXY) * VacXY_hex_pixel_area
+            actual_area = VacXY_hex_pixel_area * (1/6*vacNeighbors_counts[2] + 1/3*vacNeighbors_counts[3] + 1/2*vacNeighbors_counts[4] + 2/3*vacNeighbors_counts[5] + vacNeighbors_counts[6])
+            # print(f"actual_area = {actual_area:.5f}")
 
             VacXY_roughness_hull_perimeter = actual_perimeter / hull_perimeter 
             VacXY_roughness_hull_area = actual_area / hull_area
             VacXY_cir_ratio = 4*np.pi*actual_area / (actual_perimeter)**2
+            print(f"VacXY_roughness_hull_perimeter (should always be >=1) = {VacXY_roughness_hull_perimeter:.5f}")
+            print(f"VacXY_roughness_hull_area (should always be <=1) = {VacXY_roughness_hull_area:.5f}")
+            print(f"VacXY_cir_ratio = {VacXY_cir_ratio:.5f}")
 
         except QhullError as e:
             print(f"ConvexHull failed. (Expected behavior for end of simulation) We are setting VacXY_xxx to placeholder values. ")
@@ -434,7 +456,7 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
             occupied_coordXZ.append(site.real_space_coord[[0, 2]])
     occupied_coordXZ = np.array(occupied_coordXZ)
 
-    if len(occupied_coordXZ) <= 2:
+    if len(occupied_coordXZ) <= 3:
         XZ_bb_AR = 0.0
     else:
         min_x = np.min(occupied_coordXZ[:, 0])
@@ -443,7 +465,7 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
         max_z = np.max(occupied_coordXZ[:, 1])
         XZ_bb_AR = (max_x - min_x) / (max_z - min_z)
 
-    if len(occupied_coordXZ) <= 3:
+    if len(occupied_coordXZ) <= 5:
         print(f"Insufficient points to compute ConvexHull: {len(occupied_coordXZ)} points")
         XZ_area_ratio = 0.0
     else: 
@@ -452,6 +474,7 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
             hull_area = hull.volume
             XZ_bb_area = (max_x - min_x) * (max_z - min_z)
             XZ_area_ratio = hull_area / XZ_bb_area
+            print(f"XZ_area_ratio (should always be <=1) = {XZ_area_ratio:.5f}")
         except QhullError as e:
             print(f"ConvexHull failed. (Expected behavior for end of simulation) We are setting XZ_area_ratio to a placeholder value.")
             XZ_area_ratio = 0.0
@@ -483,6 +506,7 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
             hull_area = hull.volume
             YZ_bb_area = (max_y - min_y) * (max_z - min_z)
             YZ_area_ratio = hull_area / YZ_bb_area
+            print(f"YZ_area_ratio (should always be <=1) = {YZ_area_ratio:.5f}")
         except QhullError as e:
             print(f"ConvexHull failed. (Expected behavior for end of simulation) We are setting YZ_area_ratio to a placeholder value.")
             YZ_area_ratio = 0.0
@@ -492,6 +516,8 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
         "num_cation": num_cation, 
         "num_anion": num_anion, 
         "energy": energy, 
+        "binding_energy": binding_energy, 
+        "surface_energy": surface_energy, 
         "neighbor_3D_counts": neighbor_3D_counts, 
         "thickness": max_z - min_z, 
         "neighbor_XY_counts": neighbor_XY_counts, 
@@ -503,6 +529,7 @@ def collect_stats(site_list, siteXY_list, vacXY_list, sim_params, writeProjXY_fi
         "vac_a2_layer_counts": vac_a2_layer_counts, 
         "vac_a3_layer_counts": vac_a3_layer_counts, 
         "VacXY_roughness_perimeter": VacXY_roughness_perimeter, 
+        "VacXY_rel_std": VacXY_rel_std, 
         "VacXY_roughness_hull_perimeter": VacXY_roughness_hull_perimeter, 
         "VacXY_roughness_hull_area": VacXY_roughness_hull_area, 
         "VacXY_cir_ratio": VacXY_cir_ratio,
@@ -522,7 +549,7 @@ def extract_XY_occPoints_boundPoints(vacXY_list):
         if vacXY.light_up: 
             occupied_coord.append(vacXY.coordXY)
 
-            if any(not lit_up for lit_up in vacXY.neighborXY_vac_litUp_bool):
+            if np.sum(np.array(vacXY.neighborXY_vac_litUp_bool))!=6:
                 boundary_coord.append(vacXY.coordXY)
 
     return np.array(occupied_coord), np.array(boundary_coord)
